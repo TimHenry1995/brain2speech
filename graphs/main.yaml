@@ -1,0 +1,61 @@
+import:
+- load_from_file.yaml
+
+graphs:
+
+  - id: Broker
+    nodes:
+    - id: proxy
+      module: timeflux.nodes.zmq
+      class: Broker
+
+  - id: Subscriber
+    nodes:
+    - id: sub
+      module: timeflux.nodes.zmq
+      class: Sub
+      params:
+        topics: [ spectrogram, eeg, marker ]
+
+    - id: spectrogram_monitor
+      module: nodes.monitor
+      class: Imshow
+      params:
+        name: spectrogram_monitor
+        time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
+        title: "Speech"
+        y_label: "Mel Bins"
+        height: 2
+        is_visible: {{MONITOR_VISIBLE}}
+    
+    - id: eeg_monitor
+      module: nodes.monitor
+      class: Imshow
+      params:
+        name: eeg_monitor
+        time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
+        title: "EEG"
+        y_label: "Features"
+        height: 2.5
+        is_visible: {{MONITOR_VISIBLE}}
+
+    - id: marker_monitor
+      module: nodes.monitor
+      class: Text
+      params:
+        name: marker_monitor
+        time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
+        title: "Words"
+        y_label: ""
+        height: 2
+        is_visible: {{MONITOR_VISIBLE}}
+
+    edges:
+      - source: sub:spectrogram
+        target: spectrogram_monitor
+      - source: sub:eeg
+        target: eeg_monitor
+      - source: sub:marker
+        target: marker_monitor
+    
+    rate: {{MAIN_RATE}}

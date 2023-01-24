@@ -1,0 +1,63 @@
+graphs:
+  - id: Publisher
+    nodes:
+    - id: spectrogram_loader
+      module: nodes.load_from_file
+      class: Load_From_File
+      params:
+        name: spectrogram_loader
+        data_folder_path: {{DATA_FOLDER_PATH}}
+        subject_identifier: {{SUBJECT_IDENTIFIER}}
+        stream_name: spec
+        seconds_per_time_frame: {{DATA_SECONDS_PER_TIME_FRAME}}
+        proportion: {{DATA_PROPORTION}}
+
+    - id: eeg_loader
+      module: nodes.load_from_file
+      class: Load_From_File
+      params:
+        name: eeg_loader
+        data_folder_path: {{DATA_FOLDER_PATH}}
+        subject_identifier: {{SUBJECT_IDENTIFIER}}
+        stream_name: feat
+        seconds_per_time_frame: {{DATA_SECONDS_PER_TIME_FRAME}}
+        proportion: {{DATA_PROPORTION}}
+
+    - id: marker_loader
+      module: nodes.load_from_file
+      class: Load_From_File
+      params:
+        name: marker_loader
+        data_folder_path: {{DATA_FOLDER_PATH}}
+        subject_identifier: {{SUBJECT_IDENTIFIER}}
+        stream_name: procWords
+        seconds_per_time_frame: {{DATA_SECONDS_PER_TIME_FRAME}}
+        proportion: {{DATA_PROPORTION}}
+
+    - id: spectrogram_pub
+      module: timeflux.nodes.zmq
+      class: Pub
+      params:
+        topic: spectrogram
+        
+    - id: eeg_pub
+      module: timeflux.nodes.zmq
+      class: Pub
+      params:
+        topic: eeg
+        
+    - id: marker_pub
+      module: timeflux.nodes.zmq
+      class: Pub
+      params:
+        topic: marker
+
+    edges:
+    - source: spectrogram_loader
+      target: spectrogram_pub
+    - source: eeg_loader
+      target: eeg_pub
+    - source: marker_loader
+      target: marker_pub
+
+    rate: {{MAIN_RATE}}
