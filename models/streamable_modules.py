@@ -1,7 +1,7 @@
 import torch 
 import math
 import warnings
-from typing import Union, List, Type
+from typing import Union, List
 from abc import ABC 
 
 class Module(ABC):
