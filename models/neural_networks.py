@@ -12,16 +12,16 @@ from models import module_converter as mc
 # Neural Network
 class NeuralNetwork(ABC):
     """This abstract base class defines a set of attributes and methods for neural networks implemented in torch.
-    A neural network is here defined as a graph of modules. It supports a stationary and a streamable mode which is fixed for the object's lifetime.
+    A neural network is here defined as a graph of modules. It supports a stationary and a streamable mode.
     It is also required that a given python process only uses a single streamable neural network at a time to prevent interference of module states."""
   
     def __init__(self, is_streamable: bool) -> object:
         """Base initializer to be inherited and extended by subclasses. 
         The subclass initializer is expected to 
         1. call this abstract base class initializer
-        2. initialize a torch.nn.Module attribute self.graph which will be used for the neural networks forward and backward operations, managing parameters for saving and loading etc., e.g. a torch.Sequential. 
-        This graph may only use stationary modules and they have to be convertible to streamable modules by the module_converter package.
-        3. set a conditional if is_streamable: self.__to_streamable__ to ensure the graph is usable in both streamable and stationary modes. 
+        2. create a list of torch.nn.Modules called modules which need to be converted in case the model is run in streamable mode.
+        3. set the conditional if is_streamable: modules = self.__to_streamable__(modules).
+        4. initialize a torch.nn.Module attribute called self.graph which will be used for the neural networks forward and backward operations, managing parameters for saving and loading etc., e.g. a torch.Sequential. 
         
         Inputs:
         - is_streamable: Indicates whether this neural network shall be used in streaming or stationary mode.
@@ -33,22 +33,21 @@ class NeuralNetwork(ABC):
         self.__fit_x_buffer__ = []
         self.__fit_y_buffer__ = []
 
-    def __to_streamable__(self, unravelled_trainable_modules: List[Union[torch.nn.Module, streamable.Module]]) -> None:
-        """Sets the internal modules to streaming or stationary modules.  
+    def __to_streamable__(self, modules: List[torch.nn.Module]) -> List[streamable.Module]:
+        """Converts modules from stationary to streaming. Assumes that the module_conveter has a mapping for that module.
         
         Inputs:
-        - is_streamable: Indicates whether the modules or self should be set to streaming or stationary modules.
-        - unravelled_trainable_modules: lists all the modules that are trainable, e.g. Linear, Conv1d and dot not contain submodules. If the inheriting subclass uses for instance a GRU 
-        then the submodules of the GRU have to be listed one by one here.
+        - modules: lists all the modules that need to be converted to streamable, e.g. Linear, Conv1d, Sum. 
         
         Outputs:
-        - None"""
+        - modules: the list of streamable equivalents (same order as input)."""
 
-        # Replace the __call__ or forward method of self with its alternative
-        for m, module in enumerate(unravelled_trainable_modules):
+        # Replace each module with its alternative
+        for m, module in enumerate(modules):
+            modules[m] = mc.ModuleConverter.stationary_to_streamable(module=module)
 
-            # Map from stationary to streamable
-            unravelled_trainable_modules[m] = mc.ModuleConverter.stationary_to_streamable(module=module)
+        # Outputs
+        return modules
             
     def fit(self, x: torch.Tensor, y: torch.Tensor, loss_function: Callable, optimizer: Callable,
           instances_per_batch: int = 8, epoch_count: int = 25, validation_proportion: float = 0.3, 
@@ -192,10 +191,14 @@ class Dense(NeuralNetwork):
         # Super
         super(Dense, self).__init__(is_streamable=is_streamable)
   
-        # Create graph
+        # Construct trainable layers
         linear_1 = nn.Linear(input_feature_count, output_feature_count)
         linear_2 = nn.Linear(output_feature_count, output_feature_count)
-        self.graph = nn.Sequential(linear_1, nn.ReLU(), linear_2)
-  
+        
         # Set streamable
-        if is_streamable: self.__to_streamable__(unravelled_trainable_modules=[linear_1, linear_2])
+        if is_streamable: modules = self.__to_streamable__(modules=[linear_1, linear_2])
+
+        # Create graph        
+        self.graph = nn.Sequential(modules[0], nn.ReLU(), modules[1])
+  
+        
