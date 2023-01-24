@@ -4,4 +4,4 @@ import os
 
 if __name__ == "__main__":
     mp.freeze_support()
-    tf.main(app="graphs/main.yaml", env_file=os.path.join("environments","environment.env"))
+    tf.main(app=os.path.join("graphs","main.yaml"), env_file=os.path.join("environments","environment.env"))
