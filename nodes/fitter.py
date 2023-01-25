@@ -10,23 +10,23 @@ import collections
 from multiprocessing import Process, Pipe
 
 class Fitter(Node):
-    """This node manages the flow of incoming data to a models.Fitter object which runs on a separate Process."""
+    """This node manages the flow of incoming data to a models.fitter.Fitter object which runs on a parallel process."""
 
     def __init__(self, min_unique_label_count_buffer: int) -> object:
         """Constructor for this class.
         
         Inputs:
-        - min_unique_label_count_buffer: The minimum number of labels that have to be in the buffer in order for it to flush them to the models.Fitter object for fitting.
+        - min_unique_label_count_buffer: The minimum number of unique labels excluding the pause character '' 
+            that have to be in the buffer in order for it to flush them to the models.Fitter object for fitting.
         """
 
-        # Copy attributes
+        # Set attributes
         self.min_unique_label_count_buffer = min_unique_label_count_buffer
-        self.__buffer__ = collections.deque()
-        self.__labels_in_buffer__ = collections.deque()
+        self.__reset_buffer__()
 
         # Set up parallel process
         self.__pipe_end_point__, other_end_point = Pipe()
-        self.__parallel_process__ = Process(target=self.feed_fitter, args=(other_end_point))
+        self.__parallel_process__ = Process(target=self.parallel_fitter, args=(other_end_point))
         self.__parallel_process__.start()
         self.__parallel_process_is_busy__ = False
 
@@ -43,17 +43,11 @@ class Fitter(Node):
         # Copy meta
         self.o.meta = self.i.meta
 
-        # Take out x,y, labels
+        # Take out x, y, labels
         x_slice, y_slice, labels_slice = self.i.data()
 
-        # Buffer the input
-        if len(labels_slice) > 0:
-            self.__buffer__.append((x_slice, y_slice, labels_slice))
-
-        # Update the label count
-        new_unique_labels = set(labels_slice)
-        if '' in new_unique_labels: new_unique_labels.remove('') # The empty character is assumed to separate labels
-        self.__labels_in_buffer__ += len(new_unique_labels)
+        # Extend the buffer by the input
+        if len(labels_slice) > 0: self.__extend_buffer__(x_slice=torch.Tensor(x_slice), y_slice=torch.Tensor(y_slice), labels_slice=labels_slice)
 
         # Check whether the parallel process is done
         if self.__pipe_end_point__.poll(): # Poll returns whether the pipe stores data from the parallel process
@@ -65,18 +59,54 @@ class Fitter(Node):
             self.logger.info(f"Train loss: {torch.mean(train_losses)}, Validation loss: {torch.mean(validation_losses)}")
 
         # If the buffer is large enough and the parallel process is ready
-        if self.min_unique_label_count_buffer <= self.__labels_in_buffer__ and not self.__parallel_process_is_busy__:
+        if self.min_unique_label_count_buffer <= self.__unique_labels_buffer__ and not self.__parallel_process_is_busy__:
             # Send the buffer via the pipe
-            self.__pipe_end_point__.send(self.__buffer__)
+            self.__pipe_end_point__.send((self.__x_buffer__, self.__y_buffer__, self.__labels_buffer__))
 
             # Clear the buffer
-            self.__buffer__ = collections.deque()
+            self.__reset_buffer__()
 
             # Remember that the parallel process is busy
             self.__parallel_process_is_busy__ = True
-            
+
+    def __reset_buffer__(self) -> None:
+        """Resets the buffer to empty deques."""
+        self.__x_buffer__ = collections.deque()
+        self.__y_buffer__ = collections.deque()
+        self.__labels_buffer__ = collections.deque()
+        self.__unique_labels_buffer__ = collections.deque()
+
+    def __extend_buffer__(self, x_slice: torch.Tensor, y_slice: torch.TensorType, labels_slice: List[str]) -> None:
+        """Enter the new data into the buffer. All input slices need to have the same number of time points for the buffer to stay valid.
+        Assumes the slices contain at least 1 time frame.
+
+        Inputs:
+        - x_slice: the x slice.
+        - y_slice: the y slice.
+        - labels_slice: the labels slice
+        
+        Outputs:
+        - None"""
+
+        # Input validity
+        assert type(x_slice) == torch.Tensor, f"Expected x_slice to have type torch.Tensor, received {type(x_slice)}"
+        assert type(y_slice) == torch.Tensor, f"Expected y_slice to have type torch.Tensor, received {type(y_slice)}"
+        assert type(labels_slice) == type([]), f"Expected labels_slice to have type List[str], received {type(labels_slice)}"
+        assert x_slice.size()[0] == y_slice.size()[0] and y_slice.size()[0] == len(labels_slice), f"Expected x_slice, y_slice and labels_slice to have the same number of time frames along the 0th axis. Received {x_slice.size()[0]}, {y_slice.size()[0]} and {len(labels_slice)} time frames, respectively."
+
+        # Fill the buffers
+        self.__x_buffer__.append(x_slice)
+        self.__y_buffer__.append(y_slice)
+        self.__labels_buffer__.append(labels_slice)
+
+        # Update the label count
+        new_unique_labels = set(labels_slice)
+        if '' in new_unique_labels: new_unique_labels.remove('') # The empty character is assumed to separate labels
+        self.__unique_labels_buffer__ += len(new_unique_labels)
+
+
     @staticmethod
-    def feed_fitter(pipe_end_point):
+    def parallel_fitter(pipe_end_point) -> None:
         """This function feeds the data its receives via the pipe to a models.Fitter object. It should be run on a separate process.
         It expects an initial data slice via the pipe. It will then do one fitting routine and when it is finished it will send the 
         validation and train loss via the pipe. Thereafter it is ready for the next data."""
@@ -90,7 +120,6 @@ class Fitter(Node):
         # Create an optimizer
         optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
 
-        
         while True:
             # Take a slice
             x_buffer, y_buffer, labels_buffer = pipe_end_point.recv()
