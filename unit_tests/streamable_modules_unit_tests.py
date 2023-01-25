@@ -1,6 +1,6 @@
 import sys
 sys.path.append(".")
-from neural_networks import streamable_modules as streamable
+from models import streamable_modules as streamable
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -94,7 +94,7 @@ class Conv1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test A for Conv1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test A for Conv1d.")
 
     def forward_B():
         """Tests the forward method of this class."""
@@ -121,7 +121,7 @@ class Conv1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test B for Conv1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test B for Conv1d.")
 
     def forward_C():
         """Tests the forward method of this class."""
@@ -148,7 +148,7 @@ class Conv1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test C for Conv1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test C for Conv1d.")
 
     def forward_D():
         """Tests the forward method of this class."""
@@ -175,7 +175,7 @@ class Conv1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test D for Conv1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test D for Conv1d.")
 
     def forward_E():
         """Tests the forward method of this class."""
@@ -202,7 +202,7 @@ class Conv1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test E for Conv1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test E for Conv1d.")
 
     def forward_F():
         """Tests the forward method of this class."""
@@ -229,7 +229,7 @@ class Conv1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test F for Conv1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test F for Conv1d.")
 
 class ConvTranspose1d():
     """Defines unit tests for the streamable_Conv1d class"""
@@ -260,7 +260,7 @@ class ConvTranspose1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test A for ConvTranspose1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test A for ConvTranspose1d.")
 
     def forward_B():
         """Tests the forward method of this class."""
@@ -287,7 +287,7 @@ class ConvTranspose1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test B for ConvTranspose1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test B for ConvTranspose1d.")
 
     def forward_C():
         """Tests the forward method of this class."""
@@ -346,7 +346,7 @@ class ConvTranspose1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test D for ConvTranspose1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test D for ConvTranspose1d.")
     
     def forward_E():
         """Tests the forward method of this class."""
@@ -373,7 +373,7 @@ class ConvTranspose1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test E for ConvTranspose1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test E for ConvTranspose1d.")
 
 class Sum():
     def forward_A():
@@ -406,7 +406,7 @@ class Sum():
 
         # Evaluate
         is_equal = np.allclose(a=stationary_output.detach().numpy(), b=streamable_output.detach().numpy(), atol=1e-06)
-        print("\tPassed" if is_equal else "Failed", "unit test A for Sum")
+        print("\tPassed" if is_equal else "\tFailed", "unit test A for Sum")
 
 class ReflectionPad1d():
     
@@ -423,7 +423,7 @@ class ReflectionPad1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test A for ReflectionPad1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test A for ReflectionPad1d.")
 
     def forward_B():
         # Generate data
@@ -438,8 +438,7 @@ class ReflectionPad1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test B for ReflectionPad1d.")
-
+        print("\tPassed" if is_equal else "\tFailed", "unit test B for ReflectionPad1d.")
 
     def forward_C():
         # Generate data
@@ -454,11 +453,71 @@ class ReflectionPad1d():
 
         # Evaluate
         is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
-        print("\tPassed" if is_equal else "Failed", "unit test C for ReflectionPad1d.")
+        print("\tPassed" if is_equal else "\tFailed", "unit test C for ReflectionPad1d.")
+
+    def forward_D():
+        # Generate data
+        time_point_count = 23
+        x = torch.rand([17,11,time_point_count])
+        padding = [20,0]
+        slice_size = 1
+        
+        # Generate models
+        stationary_model = torch.nn.ReflectionPad1d(padding=padding)
+        streamable_model = streamable.ReflectionPad1d(padding=padding)
+
+        # Evaluate
+        is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
+        print("\tPassed" if is_equal else "\tFailed", "unit test D for ReflectionPad1d.")
+
+    def forward_E():
+        # Generate data
+        time_point_count = 23
+        x = torch.rand([17,11,time_point_count])
+        padding = [0,11]
+        slice_size = 1
+        
+        # Generate models
+        stationary_model = torch.nn.ReflectionPad1d(padding=padding)
+        streamable_model = streamable.ReflectionPad1d(padding=padding)
+
+        # Evaluate
+        is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
+        print("\tPassed" if is_equal else "\tFailed", "unit test E for ReflectionPad1d.")
+
+    def forward_F():
+        # Generate data
+        time_point_count = 23
+        x = torch.rand([17,11,time_point_count])
+        padding = [5,8]
+        slice_size = 2
+        
+        # Generate models
+        stationary_model = torch.nn.ReflectionPad1d(padding=padding)
+        streamable_model = streamable.ReflectionPad1d(padding=padding)
+
+        # Evaluate
+        is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
+        print("\tPassed" if is_equal else "\tFailed", "unit test F for ReflectionPad1d.")
+
+    def forward_G():
+        # Generate data
+        time_point_count = 23
+        x = torch.rand([17,11,time_point_count])
+        padding = [5,8]
+        slice_size = 7
+        
+        # Generate models
+        stationary_model = torch.nn.ReflectionPad1d(padding=padding)
+        streamable_model = streamable.ReflectionPad1d(padding=padding)
+
+        # Evaluate
+        is_equal = TensorTestUtils.evaluate_prediction(streamable_model=streamable_model, stationary_model=stationary_model, x=x, slice_size=slice_size)
+        print("\tPassed" if is_equal else "\tFailed", "unit test G for ReflectionPad1d.")
 
 if __name__ == "__main__":
     print("\nUnit tests for models.streamable_modules.")
-
+    """
     # Conv1d
     Conv1d.forward_A()
     Conv1d.forward_B()
@@ -476,9 +535,13 @@ if __name__ == "__main__":
 
     # Sum
     Sum.forward_A()
-    
+    """
     # ReflectionPad1d
     ReflectionPad1d.forward_A()
     ReflectionPad1d.forward_B()
     ReflectionPad1d.forward_C()
+    ReflectionPad1d.forward_D()
+    ReflectionPad1d.forward_E()
+    ReflectionPad1d.forward_F()
+    ReflectionPad1d.forward_G()
     

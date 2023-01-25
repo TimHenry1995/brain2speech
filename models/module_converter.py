@@ -85,7 +85,7 @@ class Conv1dConverter(ModuleConverter):
                 padding = module.padding,
                 dilation = module.dilation,
                 groups = module.groups,
-                bias = module.bias,
+                bias = module.bias != None,
                 padding_mode = module.padding_mode
             )
 
@@ -128,7 +128,7 @@ class ConvTranspose1dConverter(ModuleConverter):
                 padding = module.padding,
                 dilation = module.dilation,
                 groups = module.groups,
-                bias = module.bias,
+                bias = module.bias != None,
                 padding_mode = module.padding_mode
             )
 

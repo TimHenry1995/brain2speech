@@ -1,7 +1,7 @@
 import torch 
 import math
 import warnings
-from typing import Union, List
+from typing import Union, List, Tuple
 from abc import ABC 
 
 class Module(ABC):
@@ -719,10 +719,10 @@ class Sum(Module):
         # Outputs
         return y
 
-class ReflectionPad1d(Module, torch.nn.ReflectionPad1d):
+class ReflectionPad1d(Module):
     """Provides streaming support for torch.nn.ReflectionPad1d for torch version 1.7.1.
     Here the state consists of the most recent self.padding time frames. If the sequence just begins
-    the state will accumulate those time frames. As the state contains this many time frames for the first time
+    the state will accumulate those time frames. As soon as the state contains this many time frames 
     reflection pad will be applied and output. Thereafter the state will continue to save the most recent self.padding
     time frames and the output will not be altered by the state. When the final slice is given and the state has self.padding 
     time frames then reflection pad is applied and output. 
@@ -734,13 +734,15 @@ class ReflectionPad1d(Module, torch.nn.ReflectionPad1d):
     CHANNEL_AXIS = 1
     TIME_AXIS = 2
 
-    def __init__(self, **kwargs) -> object:
+    def __init__(self, padding=Union[int, Tuple[int,int]]) -> object:
         # Super
         Module.__init__(self=self)
-        torch.nn.ReflectionPad1d.__init__(self, **kwargs)
+        if type(padding) == int: padding = (padding, padding)
+        self.padding = padding
 
         # Fields
-        self.is_warming_up = True
+        self.is_warming_up_left = True
+        self.is_warming_up_right = True
 
 
     def __propagate_x_through_state__(self, x: torch.Tensor) -> torch.Tensor:
@@ -763,46 +765,59 @@ class ReflectionPad1d(Module, torch.nn.ReflectionPad1d):
         - self.__state__ is a tensor with 0 <= k <= self.padding + 1 time frames. While the state is still accumulating, i.e. in the beginning, k <= self.padding. Later k = self.padding + 1."""
 
         # Initialize
-        y_hat = None
-
-        # Propagate x through state
-        tmp = torch.cat([self.__state__, x], dim=self.TIME_AXIS)
+        instance_count = x.size()[self.INSTANCE_AXIS]
+        channel_count = x.size()[self.CHANNEL_AXIS]
+        y_hat = x#torch.empty([instance_count, channel_count, 0]) 
+                
+        # Propagate x through the right state
+        right_tmp = torch.cat([self.__state__[1], x], dim=self.TIME_AXIS)
         
         # In the beginning the first few slices are just used for warm up
-        if self.is_warming_up:
-            # Either the current call to this method is still warming up the state
-            if tmp.size()[self.TIME_AXIS] <= self.padding[0]:
-                # Then we append x to the state
-                self.__state__ = tmp
-                
-                # And we cannot yet return any data
-                instance_count = self.__state__.size()[self.INSTANCE_AXIS]
-                channel_count = self.__state__.size()[self.CHANNEL_AXIS]
-                y_hat = torch.empty([instance_count, channel_count, 0]) 
-
-            # Or it finishes the warm up
+        # Warm up the right state
+        if self.is_warming_up_right:
+            # Either the current call to this method is still warming up the right state
+            if right_tmp.size()[self.TIME_AXIS] <= self.padding[1]:
+                # Then we append x to the right state
+                self.__state__[1] = right_tmp
+            # Or it finishes the warm up of the right state
             else:
-                # Then we remember that we warmed up the state
-                self.is_warming_up = False
-                
-                # And we just save the self.padding + 1 most recent time frames
-                i = tmp.size()[self.TIME_AXIS] - self.padding[0] - 1 # i is non-negative because tmp has more time frames than self.padding due to warm up
-                self.__state__ = tmp[:,:,i:]
+                # Then we remember that we warmed up the right state
+                self.is_warming_up_right = False
 
-                # And we apply a reflection to output padded left-version of state and x
-                tmp = torch.nn.ReflectionPad1d.forward(self, tmp)
-                i = tmp.size()[self.TIME_AXIS] - self.padding[0]
-                y_hat = tmp[:,:,:i] # Removing the right pad since the stream just started
-
-        # Later 
-        else:
-            # We just save the self.padding + 1 most recent time frames
-            i = tmp.size()[self.TIME_AXIS] - self.padding[0] - 1 # i is non-negative because tmp has more time frames than self.padding due to warm up
-            self.__state__ = tmp[:,:,i:]
+        # If right state is warmed up  
+        if not self.is_warming_up_right:
+            # We just save the self.padding[1] + 1 most recent time frames
+            i = right_tmp.size()[self.TIME_AXIS] - self.padding[1] - 1 # i is non-negative because right_tmp has more time frames than self.padding[1] due to warm up
+            self.__state__[1] = right_tmp[:,:,i:]
             
-            # And output x
+            # And output x (to be overidden if the left state is still warming up)
             y_hat = x
 
+        # Warm up left
+        if self.is_warming_up_left:
+            # Propagate x through the left state
+            left_tmp = torch.cat([self.__state__[0], x], dim=self.TIME_AXIS)
+        
+            # Either the current call to this method is still warming up the left state
+            if left_tmp.size()[self.TIME_AXIS] <= self.padding[0]:
+                # Then we append x to the left state
+                self.__state__[0] = left_tmp
+
+                # And we cannot yet return any data
+                y_hat = torch.empty([instance_count, channel_count, 0]) 
+
+            # Or it finishes the warm up of the left state
+            else:
+                # Then we remember that we warmed up the left state
+                self.is_warming_up_left = False
+                
+                # We clear the left state as it is no longer needed
+                self.__state__[0] = None
+
+                # And we apply a reflection to output the left-padded version of the left state and x
+                pad = torch.flip(left_tmp[:,:,1:self.padding[0]+1], dims=[self.TIME_AXIS])
+                y_hat = torch.cat([pad, left_tmp], dim=self.TIME_AXIS)
+                
         # Outputs
         return y_hat
 
@@ -810,7 +825,8 @@ class ReflectionPad1d(Module, torch.nn.ReflectionPad1d):
         # Initialize state
         instance_count = x.size()[self.INSTANCE_AXIS]
         channel_count = x.size()[self.CHANNEL_AXIS]
-        self.__state__ = torch.empty([instance_count, channel_count, 0]) 
+        self.__state__ = [torch.empty([instance_count, channel_count, 0]), # Left state
+                          torch.empty([instance_count, channel_count, 0])] # Right state
 
         # Propagate x through state
         y_hat = self.__propagate_x_through_state__(x=x)
@@ -827,18 +843,33 @@ class ReflectionPad1d(Module, torch.nn.ReflectionPad1d):
 
     def __forward_and_finish_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
         # Apply a right-reflection pad to the state and x
-        tmp = torch.cat([self.__state__, x], dim=self.TIME_AXIS)
-        y_hat = torch.nn.ReflectionPad1d.forward(self, tmp)
+        tmp = torch.cat([self.__state__[1], x], dim=self.TIME_AXIS)
+        pad = torch.flip(tmp[:,:,-self.padding[1]-1:-1], dims=[self.TIME_AXIS])
+        y_hat = torch.cat([tmp, pad], dim=self.TIME_AXIS)
 
         # Crop to only return x and the rigth pad
-        i = y_hat.size()[self.TIME_AXIS] - x.size()[self.TIME_AXIS] - self.padding[0] # Is positive because the class assumption asserts that in the end the state has more than self.padding time points.
+        time_frames_to_keep = x.size()[self.TIME_AXIS] + self.padding[1] 
+        i = y_hat.size()[self.TIME_AXIS] - time_frames_to_keep # Is positive because the class assumption asserts that in the end the state has more than self.padding[1] time points.
         y_hat = y_hat[:,:,i:] # Remove the left pad
 
         # Reset fields
-        self.is_warming_up = True
+        self.is_warming_up_left = True
+        self.is_warming_up_right = True
+        self.__state__ = None
 
         # Outputs
         return y_hat
+
+class CausalZeroPad(Module):
+    """Provides streaming support for torch. for torch version 1.7.1.
+    Here the state consists of the most recent self.padding time frames. If the sequence just begins
+    the state will accumulate those time frames. As soon as the state contains this many time frames 
+    reflection pad will be applied and output. Thereafter the state will continue to save the most recent self.padding
+    time frames and the output will not be altered by the state. When the final slice is given and the state has self.padding 
+    time frames then reflection pad is applied and output. 
+    
+    Assumptions:
+    - The total number of time frames needs to be larger than self.padding."""
 
 class Linear(Module, torch.nn.Linear):
     """Provides a trivial implementation for streaming support for a torch.nn.Linear module."""
