@@ -722,14 +722,15 @@ class Sum(Module):
 class Pad1d(Module):
     """Provides streaming support for torch.nn.functional.pad with modes 'constant', 'replication' and 'reflection' for torch version 1.7.1. 
     Note that mode 'circular' is not supported as it would defeat the purpose of streaming.
-    Here the state consists of the most recent self.padding time frames. If the sequence just begins
-    the state will accumulate those time frames. As soon as the state contains this many time frames 
-    reflection pad will be applied and output. Thereafter the state will continue to save the most recent self.padding
-    time frames and the output will not be altered by the state. When the final slice is given and the state has self.padding 
-    time frames then reflection pad is applied and output. 
+    Here the state consists of two substates - the left and the right one. The most recent self.padding[0] time frames will be stored 
+    in the left state and the most recent self.padding[1] time frames in the right state. If the sequence just begins
+    the state will accumulate those time frames. As soon as the left substate contains this self.padding[0] many time frames 
+    padding will be applied and output. Thereafter the input will be passed directly through as output and the right substate will 
+    continue to save the most recent self.padding[1] time frames. When the final slice is given and the state has self.padding[1] 
+    time frames then pad is applied and output. 
     
     Assumptions:
-    - The total number of time frames needs to be larger than self.padding."""
+    - The total number of time frames needs to be larger than max(self.padding)."""
 
     INSTANCE_AXIS = 0
     CHANNEL_AXIS = 1
@@ -763,22 +764,23 @@ class Pad1d(Module):
 
     def __propagate_x_through_state__(self, x: torch.Tensor) -> torch.Tensor:
         """Mutator method that propagates x through state and makes sure that the state is equal to the k most recent time frames,
-        where k is at least 0 and at most self.padding + 1 time frames. Important! This method only covers the warm up and the ongoing stream. 
-        The final slice which needs a right-reflection pad is not covered here. 
+        where k is at least 0 and at most self.padding[0] + 1 time frames for the left substate and self.padding[1] + 1 time frames for the right substate. 
+        Important! This method only covers the warm up and the ongoing stream. The final slice which needs a right-reflection pad is not covered here. 
         
         Preconditions: 
-        - self.__state__ is a tensor. Possibly empty.
+        - self.__state__ is a list of two tensors (the left and right substates). Possibly empty.
         
         Inputs:
         - x: the input from which time frames shall be propagated through the state.
         
         Outputs:
-        - y_hat: the output. If the total number of time frames of state and x is at most self.padding then y_hat is empty on the time axis.
-        If that number is equal to self.padding + 1 for the first time, then state has just collected enough time points to output the left-reflection paded version of state and x. 
-        If that number is equal to self.padding + 1 at a later time, then y_hat is just x.
+        - y_hat: the output. If the total number of time frames of the left substate and x is at most self.padding[0] then y_hat is empty on the time axis.
+        If that number is at least to self.padding[0] + 1 for the first time, then the left substate has just collected enough time frames to output the left-paded version of the left substate and x. 
+        If that number is at least self.padding[0] + 1 at a later time, then y_hat is just x.
         
         Postcondition:
-        - self.__state__ is a tensor with 0 <= k <= self.padding + 1 time frames. While the state is still accumulating, i.e. in the beginning, k <= self.padding. Later k = self.padding + 1."""
+        - self.__state__ is a list of two tensors (the left and right substates) with 0 <= k <= self.padding + 1 time frames for the left and right substates, respectively. 
+            While the state is still accumulating, i.e. in the beginning, k <= self.padding. Later k = self.padding + 1."""
 
         # Initialize
         instance_count = x.size()[self.INSTANCE_AXIS]
