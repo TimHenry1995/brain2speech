@@ -719,8 +719,9 @@ class Sum(Module):
         # Outputs
         return y
 
-class ReflectionPad1d(Module):
-    """Provides streaming support for torch.nn.ReflectionPad1d for torch version 1.7.1.
+class Pad1d(Module):
+    """Provides streaming support for torch.nn.functional.pad with modes 'constant', 'replication' and 'reflection' for torch version 1.7.1. 
+    Note that mode 'circular' is not supported as it would defeat the purpose of streaming.
     Here the state consists of the most recent self.padding time frames. If the sequence just begins
     the state will accumulate those time frames. As soon as the state contains this many time frames 
     reflection pad will be applied and output. Thereafter the state will continue to save the most recent self.padding
@@ -734,11 +735,26 @@ class ReflectionPad1d(Module):
     CHANNEL_AXIS = 1
     TIME_AXIS = 2
 
-    def __init__(self, padding=Union[int, Tuple[int,int]]) -> object:
+    def __init__(self, padding: Union[int, Tuple[int,int]], mode: str = 'constant', value: int = 0) -> object:
+        """Constructor for this class.
+        
+        Inputs:
+        - padding: the number of time frames to be padded. If int then the same number of time frames will be padded left and right. 
+            If (int,int) then the first int specifies the left padding and the second int the right padding.
+        - mode: one of 'constant', 'reflect' and 'replicate'. The strategy used for padding where constant meant the same 
+            value will be repeated, reflect means the input value will be flipped and replicate means the edge values will be repeated. 
+            For examples see torch.nn.functional.pad.
+        value: if mode=='constant' then this value will be repeated for the pad."""
+        
+        # Input validity
+        assert mode in ['constant','reflect','replicate'], f"Expected padding mode to be in ['constant','reflect','replicate'], received {mode}"
+
         # Super
         Module.__init__(self=self)
         if type(padding) == int: padding = (padding, padding)
         self.padding = padding
+        self.mode = mode
+        self.value = value
 
         # Fields
         self.is_warming_up_left = True
@@ -814,9 +830,8 @@ class ReflectionPad1d(Module):
                 # We clear the left state as it is no longer needed
                 self.__state__[0] = None
 
-                # And we apply a reflection to output the left-padded version of the left state and x
-                pad = torch.flip(left_tmp[:,:,1:self.padding[0]+1], dims=[self.TIME_AXIS])
-                y_hat = torch.cat([pad, left_tmp], dim=self.TIME_AXIS)
+                # And we apply a padding to output the left-padded version of the left state and x
+                y_hat = torch.nn.functional.pad(input=left_tmp, pad=[self.padding[0], 0], mode=self.mode, value=self.value)
                 
         # Outputs
         return y_hat
@@ -844,8 +859,7 @@ class ReflectionPad1d(Module):
     def __forward_and_finish_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
         # Apply a right-reflection pad to the state and x
         tmp = torch.cat([self.__state__[1], x], dim=self.TIME_AXIS)
-        pad = torch.flip(tmp[:,:,-self.padding[1]-1:-1], dims=[self.TIME_AXIS])
-        y_hat = torch.cat([tmp, pad], dim=self.TIME_AXIS)
+        y_hat = torch.nn.functional.pad(input=tmp, pad=[0, self.padding[1]], mode=self.mode, value=self.value)
 
         # Crop to only return x and the rigth pad
         time_frames_to_keep = x.size()[self.TIME_AXIS] + self.padding[1] 
@@ -856,50 +870,6 @@ class ReflectionPad1d(Module):
         self.is_warming_up_left = True
         self.is_warming_up_right = True
         self.__state__ = None
-
-        # Outputs
-        return y_hat
-
-class CausalZeroPad(Module):
-    """Provides streaming support for torch. for torch version 1.7.1.
-    Here the state consists of the most recent self.padding time frames. If the sequence just begins
-    the state will accumulate those time frames. As soon as the state contains this many time frames 
-    reflection pad will be applied and output. Thereafter the state will continue to save the most recent self.padding
-    time frames and the output will not be altered by the state. When the final slice is given and the state has self.padding 
-    time frames then reflection pad is applied and output. 
-    
-    Assumptions:
-    - The total number of time frames needs to be larger than self.padding."""
-
-class Linear(Module, torch.nn.Linear):
-    """Provides a trivial implementation for streaming support for a torch.nn.Linear module."""
-
-    def __init__(self, kwargs) -> object:
-        """Initializer for this class.
-        
-        Inputs:
-        - kwargs: The same arguments as for torch.nn.Linear."""
-        
-        torch.nn.Linear.__init__(self, **kwargs)
-        Module.__init__(self)
-
-    def __forward_and_initialize_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
-        # Predict
-        y_hat = torch.nn.Linear.forward(self=self, input=x)
-
-        # Outputs
-        return y_hat
-    
-    def __forward_and_propagate_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
-        # Predict
-        y_hat = torch.nn.Linear.forward(self=self, input=x)
-
-        # Outputs
-        return y_hat
-
-    def __forward_and_finish_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
-        # Predict
-        y_hat = torch.nn.Linear.forward(self=self, input=x)
 
         # Outputs
         return y_hat
