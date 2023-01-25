@@ -875,3 +875,36 @@ class Pad1d(Module):
 
         # Outputs
         return y_hat
+
+class Linear(Module, torch.nn.Linear):
+    """Provides a trivial implementation for streaming support for a torch.nn.Linear module."""
+
+    def __init__(self, kwargs) -> object:
+        """Initializer for this class.
+        
+        Inputs:
+        - kwargs: The same arguments as for torch.nn.Linear."""
+        
+        torch.nn.Linear.__init__(self, **kwargs)
+        Module.__init__(self)
+
+    def __forward_and_initialize_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
+        # Predict
+        y_hat = torch.nn.Linear.forward(self=self, input=x)
+
+        # Outputs
+        return y_hat
+    
+    def __forward_and_propagate_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
+        # Predict
+        y_hat = torch.nn.Linear.forward(self=self, input=x)
+
+        # Outputs
+        return y_hat
+
+    def __forward_and_finish_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
+        # Predict
+        y_hat = torch.nn.Linear.forward(self=self, input=x)
+
+        # Outputs
+        return y_hat
