@@ -176,13 +176,22 @@ class SumConverter(ModuleConverter):
         # Outputs
         return stationary_module
 
-class ReflectionPad1dConverter(ModuleConverter):
+class Pad1dConverter(ModuleConverter):
     """This class provides a method to convert between stationary and streamable ReflectionPad1d."""
 
     @staticmethod
     def stationary_to_streamable(module: torch.nn.Module) -> streamable.Module:
+        padding = module.padding # All stationary Pad1d classes have this attribute
+        value = 0
+        if 'Constant' in type(module): 
+            mode = 'constant'
+            value = module.value
+        elif 'Reflection' in type(module): mode = 'reflect'
+        elif 'Replication' in type(module): mode = 'replication'
+        else: raise Exception(f"The module of type {type(module)} cannot be covnerted to a streamable Pad1d because its padding mode is not supported")
+        
         # Create module equivalent
-        streamable_module = streamable.ReflectionPad1d(padding = module.padding)
+        streamable_module = streamable.Pad1d(padding = module.padding, mode=mode, value=value)
 
         # Outputs
         return streamable_module
