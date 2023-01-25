@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+import torch.nn
 from abc import ABC
 from sklearn.utils import shuffle
 from typing import Union, List, Dict
@@ -8,7 +8,6 @@ sys.path.append(".")
 from models import streamable_modules as streamable
 from models import module_converter as mc
 
-# Neural Network
 class NeuralNetwork(torch.nn.Module, ABC):
     """This class provides functionality for neural networks that can be used in streamable and stationary mode."""
 
@@ -20,7 +19,9 @@ class NeuralNetwork(torch.nn.Module, ABC):
         3. Save the convertible modules such that they can be used for your later computations. 
             E.g. if you use a sequential module, provide them to the sequential module or 
             if you use the modules as attributes of your neural network, e.g. query, key, value 
-            layers in an attention mechanism then use the ones from the convertible_modules dictionary.
+            layers in an attention mechanism then save these modules one by one as attributes of self.
+            Do not simply save the convertible_modules dictionary as an attribute because then torch is 
+            not guaranteed to find them for saving, loading or simply getting the parameters of you neural network.
         
         Inputs:
         - is_streamable: Indicates whether this neural network shall be used in streaming or stationary mode.
@@ -72,7 +73,6 @@ class NeuralNetwork(torch.nn.Module, ABC):
         # Outputs
         return y_hat
 
-# Dense neural network
 class Dense(NeuralNetwork):
     """This class is a dense neural network."""
 
@@ -90,14 +90,14 @@ class Dense(NeuralNetwork):
         super(Dense, self).__init__(is_streamable=is_streamable)
 
         # 1. Create a dictionary of stationary modules
-        convertible_modules = { 'linear_1': nn.Linear(input_feature_count, output_feature_count),
-                                'linear_2': nn.Linear(output_feature_count, output_feature_count)}
+        convertible_modules = { 'linear_1': torch.nn.Linear(input_feature_count, output_feature_count),
+                                'linear_2': torch.nn.Linear(output_feature_count, output_feature_count)}
         
         # 2. Convert them to streamable modules
         if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
         
         # 3. Save the convertible modules for later computations     
-        self.sequential = nn.Sequential(convertible_modules['linear_1'], nn.ReLU(), convertible_modules['linear_2'])
+        self.sequential = torch.nn.Sequential(convertible_modules['linear_1'], torch.nn.ReLU(), convertible_modules['linear_2'])
   
     def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
         # Predict
@@ -106,3 +106,61 @@ class Dense(NeuralNetwork):
         # Outputs
         return y_hat
         
+class Convolutional(NeuralNetwork):
+    """This class is a convolutional neural network."""
+
+    def __init__(self, input_feature_count: int, output_feature_count: int, is_streamable: bool = False) -> object:
+        """Constructor for this class.
+        
+        Inputs:
+        - input_feature_count: number of input features.
+        - output_feature_count: number of output features.
+        - is_streamable: Indicates whether this neural network shall be used in streaming or stationary mode.
+        """
+    
+        # Following the super class instructions for initialization
+        # 0. Super
+        super(Convolutional, self).__init__(is_streamable=is_streamable)
+
+        # 1. Create a dictionary of stationary modules
+        convertible_modules = {
+            'convolutional_1': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=8, dilation=8),
+            'convolutional_2': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=4, dilation=4),
+            'convolutional_3': torch.nn.Conv1d(input_feature_count, output_feature_count, kernel_size=2, dilation=2),
+            'pad_1': torch.nn.ConstantPad1d(padding=[(8-1)*8,0], value=0),
+            'pad_2': torch.nn.ConstantPad1d(padding=[(4-1)*4,0], value=0),
+            'pad_3': torch.nn.ConstantPad1d(padding=[(2-1)*2,0], value=0)}
+        
+        # 2. Convert them to streamable modules
+        if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
+        
+        # 3. Save the convertible modules for later computations 
+        self.convolutional_1 = convertible_modules['convolutional_1']
+        self.convolutional_2 = convertible_modules['convolutional_2']
+        self.convolutional_3 = convertible_modules['convolutional_3'] 
+        self.pad_1 = convertible_modules['pad_1']
+        self.pad_2 = convertible_modules['pad_2']
+        self.pad_3 = convertible_modules['pad_3']
+  
+    def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
+        # Predict
+        x=Convolutional.Transpose()(x)
+        x=self.pad_1(x)
+        x=self.convolutional_1(x)
+        x=torch.nn.ReLU()(x)
+        x=self.pad_2(x)
+        x=self.convolutional_2(x)
+        x=torch.nn.ReLU()(x)
+        x=self.pad_3(x)
+        x=self.convolutional_3(x)
+        x=Convolutional.Transpose()(x)
+        y_hat = x
+
+        # Outputs
+        return y_hat
+
+    class Transpose(torch.nn.Module):
+        """Transposes inputs with 3 dimensions along the final two dimensions"""
+        
+        def forward(self, x):
+            return x.permute(dims=(0,2,1))

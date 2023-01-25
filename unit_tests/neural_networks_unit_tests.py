@@ -52,8 +52,8 @@ class NeuralNetwork():
         print("\tPassed" if is_equal else "\tFailed", f"unit test A for {type}.")
 
     @staticmethod
-    def test_B(stationary_neural_network: mnn.NeuralNetwork, type: str, kwargs: Dict[str, Any], instance_count: int, time_frame_count: int,
-        input_feature_count: int) -> None:
+    def test_B(stationary_neural_network: mnn.NeuralNetwork, type: str, kwargs: Dict[str, Any], instance_count: int, 
+    time_frames_per_slice: int, slice_count: int, input_feature_count: int) -> None:
         """This unit test lets the stationary_neural_network predict for an arbitrary input of shape [instance_count, time_frame_count, feature_count], 
         converts the neural network to a streamable equivalent and then predicts for the same input in streamable mode.
         It then compares whether the two models gave the same output.
@@ -63,16 +63,14 @@ class NeuralNetwork():
         - type: the type of the neural network.
         - kwargs: a dictionary with all the keyword arguments used to construct an instance of the neural network excluding the is_streamable argument.
         - instance_count: the number of instances to be used.
-        - time_frame_count: the number of time frames to be used.
+        - time_frames_per_slice: the number of time frames for each slice during streaming.
+        - slice_count: Integer sufficiently large for the states of the streamable module to accumulate. The number of slices used during streaming.
         - input_feature_count: the number of input features to be used.
         
         Ouputs:
         - None"""
       
         # Shapes
-        time_frames_per_slice = 8
-        slice_count = 4
-        instance_count = 16
         time_frame_count = time_frames_per_slice * slice_count
         
         # Create data
@@ -119,7 +117,27 @@ class Dense():
     def test_B() -> None:
         kwargs = {'input_feature_count':3, 'output_feature_count':6}
         dense = mnn.Dense(**kwargs, is_streamable=False)
-        NeuralNetwork.test_B(stationary_neural_network=dense, type=mnn.Dense, kwargs=kwargs, instance_count=16, time_frame_count=64, 
+        NeuralNetwork.test_B(stationary_neural_network=dense, type=mnn.Dense, kwargs=kwargs,
+        instance_count=16, time_frames_per_slice = 8, slice_count=64, 
+            input_feature_count=kwargs['input_feature_count'])
+
+class Convolutional():
+    """This class provides unit tests for neural_networks.Convolutional."""
+
+    @staticmethod
+    def test_A() -> None:
+        input_feature_count=3
+        output_feature_count=6
+        convolutional = mnn.Convolutional(input_feature_count=input_feature_count, output_feature_count=output_feature_count, is_streamable=False)
+        NeuralNetwork.test_A(stationary_neural_network=convolutional, type=mnn.Convolutional, instance_count=16, time_frame_count=64, 
+            input_feature_count=input_feature_count, output_feature_count=output_feature_count)
+
+    @staticmethod
+    def test_B() -> None:
+        kwargs = {'input_feature_count':3, 'output_feature_count':6}
+        convolutional = mnn.Convolutional(**kwargs, is_streamable=False)
+        NeuralNetwork.test_B(stationary_neural_network=convolutional, type=mnn.Convolutional, kwargs=kwargs, 
+        instance_count=16, time_frames_per_slice = 8, slice_count=64,  
             input_feature_count=kwargs['input_feature_count'])
 
 if __name__ == "__main__":
@@ -128,3 +146,7 @@ if __name__ == "__main__":
     # Dense
     Dense.test_A()
     Dense.test_B()
+
+    # Convolutional
+    Convolutional.test_A()
+    Convolutional.test_B()
