@@ -719,7 +719,7 @@ class Sum(Module):
         # Outputs
         return y
 
-class Pad1d(Module):
+class Pad1d(Module, torch.nn.Module):
     """Provides streaming support for torch.nn.functional.pad with modes 'constant', 'replication' and 'reflection' for torch version 1.7.1. 
     Note that mode 'circular' is not supported as it would defeat the purpose of streaming.
     Here the state consists of two substates - the left and the right one. The most recent self.padding[0] time frames will be stored 
@@ -752,6 +752,7 @@ class Pad1d(Module):
 
         # Super
         Module.__init__(self=self)
+        torch.nn.Module.__init__(self=self)
         if type(padding) == int: padding = (padding, padding)
         self.padding = padding
         self.mode = mode

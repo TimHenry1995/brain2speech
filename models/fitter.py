@@ -4,9 +4,6 @@ from abc import ABC
 from sklearn.utils import shuffle
 from typing import Tuple, Callable, List, Dict
 import sys
-sys.path.append(".")
-from models import streamable_modules as streamable
-from models import module_converter as mc
 
 
 # Neural Network
@@ -37,7 +34,7 @@ class Fitter():
         - it is equivalent to a casual model fitting where each instance is shown to the model in an arbitrary order. 
         
         If this fitter is in streamable mode:
-        - the neural network will accumulate x over time. If this function is called
+        - the neural network will accumulate x over time where time is expected to be axis 0. If this function is called
         for the first time x will be shown once per epoch. If this function is called for the second time x will be shown twice per epoch and the previously
         provided x will be shown once per epoch. If this function is called for the kth time (k => 1), x will be shown k times per epoch and all previously provided
         xs will be shown once per epoch. This ensures that when the final slice of x is provided all slices have been shown equally often to the neural network.
@@ -74,7 +71,7 @@ class Fitter():
             # Copy the current x and y k times along the instance axis
             k = len(self.__fit_x_buffer__) + 1
             x = x.repeat(repeats=[k] + [1] * len(x.size()[1:]))
-            y = y.repeat(repeats=[k] + list(y.size()[1:]))
+            y = y.repeat(repeats=[k] + [1] * len(y.size()[1:]))
 
             # Concatenate with the buffer
             x_new = torch.concat(self.__fit_x_buffer__ + [x], dim=0)

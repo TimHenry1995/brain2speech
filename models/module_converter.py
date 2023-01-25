@@ -1,7 +1,6 @@
 import sys
 sys.path.append(".")
 from models import streamable_modules as streamable
-from models import stationary_modules as stationary
 import torch
 from abc import ABC
 from typing import Type

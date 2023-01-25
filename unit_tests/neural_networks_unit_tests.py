@@ -26,8 +26,6 @@ class NeuralNetwork():
         
         Ouputs:
         - None"""
-        
-        # Shapes
          
         # Create data
         x = torch.ones(size=(instance_count,time_frame_count,input_feature_count))
@@ -53,7 +51,7 @@ class NeuralNetwork():
 
     @staticmethod
     def test_B(stationary_neural_network: mnn.NeuralNetwork, type: str, kwargs: Dict[str, Any], instance_count: int, 
-    time_frames_per_slice: int, slice_count: int, input_feature_count: int) -> None:
+    time_frames_per_slice: int, slice_count: int, input_feature_count: int, test_name: str ='B') -> None:
         """This unit test lets the stationary_neural_network predict for an arbitrary input of shape [instance_count, time_frame_count, feature_count], 
         converts the neural network to a streamable equivalent and then predicts for the same input in streamable mode.
         It then compares whether the two models gave the same output.
@@ -66,7 +64,8 @@ class NeuralNetwork():
         - time_frames_per_slice: the number of time frames for each slice during streaming.
         - slice_count: Integer sufficiently large for the states of the streamable module to accumulate. The number of slices used during streaming.
         - input_feature_count: the number of input features to be used.
-        
+        - test_name: the name of the test as shown when printing the test result.
+
         Ouputs:
         - None"""
       
@@ -100,7 +99,7 @@ class NeuralNetwork():
             is_equal = torch.allclose(input=stationary_y_hat, other=streamable_y_hat, atol=0.1)
 
         # Log
-        print("\tPassed" if is_equal else "\tFailed", f"unit test B for {type}.")
+        print("\tPassed" if is_equal else "\tFailed", f"unit test {test_name} for {type}.")
 
 class Dense():
     """This class provides unit tests for neural_networks.Dense."""
@@ -140,6 +139,14 @@ class Convolutional():
         instance_count=16, time_frames_per_slice = 8, slice_count=64,  
             input_feature_count=kwargs['input_feature_count'])
 
+    @staticmethod
+    def test_C() -> None:
+        kwargs = {'input_feature_count':3, 'output_feature_count':6}
+        convolutional = mnn.Convolutional(**kwargs, is_streamable=False)
+        NeuralNetwork.test_B(stationary_neural_network=convolutional, type=mnn.Convolutional, kwargs=kwargs, 
+        instance_count=16, time_frames_per_slice = 1, slice_count=64,  
+            input_feature_count=kwargs['input_feature_count'], test_name='C')
+
 if __name__ == "__main__":
     print("\nUnit tests for models.neural_networks.")
 
@@ -150,3 +157,4 @@ if __name__ == "__main__":
     # Convolutional
     Convolutional.test_A()
     Convolutional.test_B()
+    Convolutional.test_C()

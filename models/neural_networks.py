@@ -135,32 +135,27 @@ class Convolutional(NeuralNetwork):
         if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
         
         # 3. Save the convertible modules for later computations 
-        self.convolutional_1 = convertible_modules['convolutional_1']
-        self.convolutional_2 = convertible_modules['convolutional_2']
-        self.convolutional_3 = convertible_modules['convolutional_3'] 
-        self.pad_1 = convertible_modules['pad_1']
-        self.pad_2 = convertible_modules['pad_2']
-        self.pad_3 = convertible_modules['pad_3']
+        self.sequential = torch.nn.Sequential(
+            Convolutional.Transpose(),
+            convertible_modules['pad_1'],
+            convertible_modules['convolutional_1'], torch.nn.ReLU(),
+            convertible_modules['pad_2'],
+            convertible_modules['convolutional_2'], torch.nn.ReLU(),
+            convertible_modules['pad_3'],
+            convertible_modules['convolutional_3'],
+            Convolutional.Transpose()
+        )
   
     def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
         # Predict
-        x=Convolutional.Transpose()(x)
-        x=self.pad_1(x)
-        x=self.convolutional_1(x)
-        x=torch.nn.ReLU()(x)
-        x=self.pad_2(x)
-        x=self.convolutional_2(x)
-        x=torch.nn.ReLU()(x)
-        x=self.pad_3(x)
-        x=self.convolutional_3(x)
-        x=Convolutional.Transpose()(x)
-        y_hat = x
+        y_hat = self.sequential(x)
 
         # Outputs
         return y_hat
 
     class Transpose(torch.nn.Module):
-        """Transposes inputs with 3 dimensions along the final two dimensions"""
+        """Transposes inputs with along the final two dimensions"""
         
         def forward(self, x):
-            return x.permute(dims=(0,2,1))
+
+            return x.permute(dims=list(range(len(x.size())-2)) + [-1,-2])

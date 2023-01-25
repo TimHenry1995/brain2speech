@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt, numpy as np
 from typing import List
 import torch
 
-class Fit(Node):
+class Fitter(Node):
     def __init__(self) -> object:
         # Construct model
         pass

@@ -1,6 +1,6 @@
 import sys, torch
 sys.path.append(".")
-from neural_networks import utilities
+from models import utilities
 
 def test_to_batches_of_instances_A():
     x = torch.arange(start=0, end=28, step=1).reshape(shape=(7,4))
