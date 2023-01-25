@@ -37,30 +37,6 @@ class ModuleConverter(ABC):
         return streamable_module
 
     @staticmethod
-    def streamable_to_stationary(module: streamable.Module) -> torch.nn.Module:
-        """Converts a streamable module to a stationary module. The module attributes may be copied by reference. 
-        
-        Inputs:
-        - module: The streamable module.
-        
-        Outputs:
-        - stationary_module: The stationary equivalent."""
-            
-        # Extract the name of the module type
-        module_name = str(type(module)).split(".")[-1][:-2] # Taking the lowest level class name (-1) and removing the trailing two characters which are '>
-        
-        # Construct the type of the converter
-        converter_name = f"{module_name}Converter"
-        converter_type = globals().get(converter_name) # The running python process has a globals dictionary that holds the converter class
-        assert f"module_converter.{converter_name}" in str(converter_type), f"Unable to convert module from streamable to stationary because the required converter called {type(module)}Converter could not be found. It should suffice to declare such a corresponding converter class here and make sure no other package loads a class with the same name into the globals."
-        
-        # Convert
-        stationary_module = converter_type.streamable_to_stationary(module=module)
-
-        # Outputs
-        return stationary_module\
-
-    @staticmethod
     def __convert__(module: object, target_type: Type) -> object:
         """Maps the attributes from the given module to a new instance of target type.
         
@@ -104,14 +80,6 @@ class Conv1dConverter(ModuleConverter):
         # Outputs
         return streamable_module
 
-    @staticmethod
-    def streamable_to_stationary(module: streamable.Module) -> torch.nn.Module:
-        # Create module equivalent
-        stationary_module = Conv1dConverter.__convert__(module= module, target_type=torch.nn.Conv1d)
-
-        # Outputs
-        return stationary_module
-
 class ConvTranspose1dConverter(ModuleConverter):
     """This class provides a method to convert between stationary and streamable ConvTranspose1d."""
 
@@ -145,17 +113,7 @@ class ConvTranspose1dConverter(ModuleConverter):
         streamable_module = ConvTranspose1dConverter.__convert__(module=module, target_type=streamable.ConvTranspose1d)
 
         # Outputs
-        return streamable_module
-
-    
-    @staticmethod
-    def streamable_to_stationary(module: streamable.Module) -> torch.nn.Module:
-        # Create module equivalent
-        stationary_module = ConvTranspose1dConverter.__convert__(module=module, target_type=torch.nn.ConvTranspose1d)
-
-        # Outputs
-        return stationary_module
-        
+        return streamable_module    
 
 class SumConverter(ModuleConverter):
     """This class provides a method to convert between stationary and streamable Sum."""
@@ -167,14 +125,6 @@ class SumConverter(ModuleConverter):
 
         # Outputs
         return streamable_module
-
-    @staticmethod
-    def streamable_to_stationary(module: streamable.Module) -> torch.nn.Module:
-        # Create module equivalent
-        stationary_module = stationary.Sum()
-
-        # Outputs
-        return stationary_module
 
 class Pad1dConverter(ModuleConverter):
     """This class provides a method to convert between stationary and streamable ReflectionPad1d."""
@@ -195,14 +145,6 @@ class Pad1dConverter(ModuleConverter):
 
         # Outputs
         return streamable_module
-
-    @staticmethod
-    def streamable_to_stationary(module: streamable.Module) -> torch.nn.Module:
-        # Create module equivalent
-        stationary_module = torch.nn.ReflectionPad1d(padding = module.padding)
-
-        # Outputs
-        return stationary_module
 
 class LinearConverter(ModuleConverter):
     """This class provides a method to convert between stationary and streamable Linear."""
@@ -230,11 +172,3 @@ class LinearConverter(ModuleConverter):
 
         # Outputs
         return streamable_module
-
-    @staticmethod
-    def streamable_to_stationary(module: streamable.Module) -> torch.nn.Module:
-        # Create module equivalent
-        stationary_module = LinearConverter.__convert__(module=module, target_type=torch.nn.Linear)
-
-        # Outputs
-        return stationary_module
