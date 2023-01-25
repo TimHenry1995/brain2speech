@@ -41,6 +41,8 @@ class Fitter():
 
     @staticmethod
     def test_B():
+        """This test tests the fitter in streamable mode using a dense neural network.
+        It streams along the 0th axis which is interpreted as the time axis."""
         # Shapes 
         slice_count = 8
         slice_size = 16
@@ -79,8 +81,53 @@ class Fitter():
         # Log
         print("\tPassed" if is_equal else "\tFailed", f"unit test B for Fitter.")
 
+    @staticmethod
+    def test_C():
+        """This unit test tests the fitter in streamable mode using a convolutional neural network.
+        It streams along the 0th axis which is interpreted as the instance axis."""
+
+        # Shapes 
+        time_frame_count = 32
+        slice_count = 8
+        slice_size = 16
+        instance_count = slice_count * slice_size
+        input_feature_count = 3
+        output_feature_count = 5
+        
+        # Create data
+        x = torch.ones(size=(instance_count, time_frame_count,input_feature_count))
+        y = torch.zeros(size=(instance_count, time_frame_count,output_feature_count))
+
+        # Neural network
+        stationary_neural_network = mnn.Convolutional(input_feature_count=input_feature_count, output_feature_count=output_feature_count, is_streamable=False)
+
+        # Fit stream
+        optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
+        fitter = mft.Fitter(is_streamable=True)
+        
+        for i in range(slice_count):
+            # Slice data
+            x_i = x[i*slice_size:(i+1)*slice_size,:,:]
+            y_i = y[i*slice_size:(i+1)*slice_size,:,:]
+        
+            # Fit on slice
+            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=x_i, y=y_i, 
+                loss_function=torch.nn.functional.mse_loss, optimizer=optimizer, epoch_count=10, shuffle_seed=42, is_final_slice=i==slice_count-1)
+
+        # Predict
+        y_hat = stationary_neural_network.predict(x=x)
+
+        # Evaluate
+        is_equal = y.size() == y_hat.size()
+        if is_equal:
+            is_equal = torch.allclose(input=y, other=y_hat, atol=0.1)
+
+        # Log
+        print("\tPassed" if is_equal else "\tFailed", f"unit test C for Fitter.")
+
 if __name__ == "__main__":
     print("\nUnit tests for models.fitter.")
 
     Fitter.test_A()
     Fitter.test_B()
+    Fitter.test_C()

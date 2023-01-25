@@ -1,18 +1,118 @@
 from timeflux.core.node import Node
 import matplotlib.pyplot as plt, numpy as np
 from typing import List
-import torch
+import torch, os, sys
+from typing import List
+sys.path.append(".")
+from models import fitter, neural_networks, utilities
+# importing module
+import collections
+from multiprocessing import Process, Pipe
 
 class Fitter(Node):
-    def __init__(self) -> object:
-        # Construct model
-        pass
+    """This node manages the flow of incoming data to a models.Fitter object which runs on a separate Process."""
+
+    def __init__(self, min_unique_label_count_buffer: int) -> object:
+        """Constructor for this class.
+        
+        Inputs:
+        - min_unique_label_count_buffer: The minimum number of labels that have to be in the buffer in order for it to flush them to the models.Fitter object for fitting.
+        """
+
+        # Copy attributes
+        self.min_unique_label_count_buffer = min_unique_label_count_buffer
+        self.__buffer__ = collections.deque()
+        self.__labels_in_buffer__ = collections.deque()
+
+        # Set up parallel process
+        self.__pipe_end_point__, other_end_point = Pipe()
+        self.__parallel_process__ = Process(target=self.feed_fitter, args=(other_end_point))
+        self.__parallel_process__.start()
+        self.__parallel_process_is_busy__ = False
 
     def update(self) -> None:
-        # Fit
-        pass
+        """Maintains a buffer of EEG, spectrogram and labels and submits it regularly to a models.fitter.Fitter object. 
+        That is, as data streams into this node in form of EEG features, speech spectrogram features and labels,
+        it will store them in a buffer. It uses the label stream to count how many completed
+        labels it received. Once that number surpasses self.min_unique_label_count_buffer the buffer is flushed to a models.fitter.Fitter object which
+        will fit a model on them. While the models.fitter.Fitter is busy this update function will buffer the new slices of
+        incoming data. As soon as the buffer surpasses self.min_unique_label_count_buffer the fitter node will take
+        the next opportunity to flush it to the models.fitter.Fitter and the cycle continues. 
+        Here, opportunity means that the models.fitter.Fitter is ready for the next fit."""
+        
+        # Copy meta
+        self.o.meta = self.i.meta
+
+        # Take out x,y, labels
+        x_slice, y_slice, labels_slice = self.i.data()
+
+        # Buffer the input
+        if len(labels_slice) > 0:
+            self.__buffer__.append((x_slice, y_slice, labels_slice))
+
+        # Update the label count
+        new_unique_labels = set(labels_slice)
+        if '' in new_unique_labels: new_unique_labels.remove('') # The empty character is assumed to separate labels
+        self.__labels_in_buffer__ += len(new_unique_labels)
+
+        # Check whether the parallel process is done
+        if self.__pipe_end_point__.poll(): # Poll returns whether the pipe stores data from the parallel process
+            # Remember this information
+            self.__parallel_process_is_busy__ = False
+
+            # Open its message and notify user
+            train_losses, validation_losses = self.__pipe_end_point__.recv() # We expect just a single message from the parallel process, containing the loss of training and validation
+            self.logger.info(f"Train loss: {torch.mean(train_losses)}, Validation loss: {torch.mean(validation_losses)}")
+
+        # If the buffer is large enough and the parallel process is ready
+        if self.min_unique_label_count_buffer <= self.__labels_in_buffer__ and not self.__parallel_process_is_busy__:
+            # Send the buffer via the pipe
+            self.__pipe_end_point__.send(self.__buffer__)
+
+            # Clear the buffer
+            self.__buffer__ = collections.deque()
+
+            # Remember that the parallel process is busy
+            self.__parallel_process_is_busy__ = True
+            
+    @staticmethod
+    def feed_fitter(pipe_end_point):
+        """This function feeds the data its receives via the pipe to a models.Fitter object. It should be run on a separate process.
+        It expects an initial data slice via the pipe. It will then do one fitting routine and when it is finished it will send the 
+        validation and train loss via the pipe. Thereafter it is ready for the next data."""
+
+        # Create a model
+        stationary_neural_network = neural_networks.Dense(input_feature_count=127, output_feature_count=80, is_streamable=False)
+
+        # Create a fitter
+        fitter = fitter.Fitter(is_streamable=True)
+
+        # Create an optimizer
+        optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
+
+        
+        while True:
+            # Take a slice
+            x_buffer, y_buffer, labels_buffer = pipe_end_point.recv()
+            x = torch.cat(list(x_buffer), dim=0) # Time axis
+            y = torch.cat(list(y_buffer), dim=0) # Time axis
+            labels = list(labels_buffer)
+
+            # Reshape
+            x, y = utilities.reshape_by_label(x=x, labels=labels, pause_string='', y=y)
+
+            # Fit
+            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=x, y=y, loss_function=torch.nn.MSELoss(), 
+                optimizer=optimizer, instances_per_batch = min(8, x.size()[0]//2), epoch_count = 5, is_final_slice=False)
+
+            # Send the result
+            pipe_end_point.send([train_losses, validation_losses])
 
     def terminate(self) -> None:
+        self.__pipe_end_point__.close() # Close the connection to the parallel process
+        if self.__parallel_process_is_busy__:
+            self.__pipe_end_point__.recv() # Wait for the other process to finish
+        self.__parallel_process__.join() # Close the parallel process
         return super().terminate()
 
     def plot_x_target_and_output(self, x: torch.Tensor, target: torch.Tensor, output: torch.Tensor, labels: List[str], pause_string: str, path: str) -> None:
@@ -21,7 +121,7 @@ class Fitter(Node):
         - x: Input EEG time series. Shape == [time frame count, eeg channel count].
         - target: Desired spectrogram. Shape == [time frame count, mel channel count].
         - output: Obtained spectrogram. Shape == [time frame count, mel channel count].
-        - labels: The labels that indicate for each time frame of x, target and output which word was present at that time. Length == time frame count.
+        - labels: The labels that indicate for each time frame of x, target and output which label was present at that time. Length == time frame count.
         - pause_string: The string used to indicate pauses.
         - path: Path to the folder where the figure should be stored.
 

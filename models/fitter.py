@@ -68,19 +68,20 @@ class Fitter():
 
         # Handle streamable mode
         if self.__is_streamable__:
-            # Copy the current x and y k times along the instance axis
-            k = len(self.__fit_x_buffer__) + 1
-            x = x.repeat(repeats=[k] + [1] * len(x.size()[1:]))
-            y = y.repeat(repeats=[k] + [1] * len(y.size()[1:]))
-
-            # Concatenate with the buffer
-            x_new = torch.concat(self.__fit_x_buffer__ + [x], dim=0)
-            y_new = torch.concat(self.__fit_y_buffer__ + [y], dim=0)
-
             # Insert it into the buffer
             self.__fit_x_buffer__.append(x)
             self.__fit_y_buffer__.append(y)
 
+            # Copy the current x and y k times along the instance axis
+            k = len(self.__fit_x_buffer__)
+            x = x.repeat(repeats=[k] + [1] * len(x.size()[1:]))
+            y = y.repeat(repeats=[k] + [1] * len(y.size()[1:]))
+
+            # Concatenate this repeated x with the other slices from the buffer
+            x_new = torch.concat(self.__fit_x_buffer__[:-1] + [x], dim=0)
+            y_new = torch.concat(self.__fit_y_buffer__[:-1] + [y], dim=0)
+
+            
             # Rename
             x = x_new
             y = y_new

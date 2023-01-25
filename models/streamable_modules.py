@@ -759,8 +759,8 @@ class Pad1d(Module, torch.nn.Module):
         self.value = value
 
         # Fields
-        self.is_warming_up_left = True
-        self.is_warming_up_right = True
+        self.__is_warming_up_left__ = True
+        self.__is_warming_up_right__ = True
 
 
     def __propagate_x_through_state__(self, x: torch.Tensor) -> torch.Tensor:
@@ -793,7 +793,7 @@ class Pad1d(Module, torch.nn.Module):
         
         # In the beginning the first few slices are just used for warm up
         # Warm up the right state
-        if self.is_warming_up_right:
+        if self.__is_warming_up_right__:
             # Either the current call to this method is still warming up the right state
             if right_tmp.size()[self.TIME_AXIS] <= self.padding[1]:
                 # Then we append x to the right state
@@ -801,10 +801,10 @@ class Pad1d(Module, torch.nn.Module):
             # Or it finishes the warm up of the right state
             else:
                 # Then we remember that we warmed up the right state
-                self.is_warming_up_right = False
+                self.__is_warming_up_right__ = False
 
         # If right state is warmed up  
-        if not self.is_warming_up_right:
+        if not self.__is_warming_up_right__:
             # We just save the self.padding[1] + 1 most recent time frames
             i = right_tmp.size()[self.TIME_AXIS] - self.padding[1] - 1 # i is non-negative because right_tmp has more time frames than self.padding[1] due to warm up
             self.__state__[1] = right_tmp[:,:,i:]
@@ -813,7 +813,7 @@ class Pad1d(Module, torch.nn.Module):
             y_hat = x
 
         # Warm up left
-        if self.is_warming_up_left:
+        if self.__is_warming_up_left__:
             # Propagate x through the left state
             left_tmp = torch.cat([self.__state__[0], x], dim=self.TIME_AXIS)
         
@@ -828,7 +828,7 @@ class Pad1d(Module, torch.nn.Module):
             # Or it finishes the warm up of the left state
             else:
                 # Then we remember that we warmed up the left state
-                self.is_warming_up_left = False
+                self.__is_warming_up_left__ = False
                 
                 # We clear the left state as it is no longer needed
                 self.__state__[0] = None
@@ -870,8 +870,8 @@ class Pad1d(Module, torch.nn.Module):
         y_hat = y_hat[:,:,i:] # Remove the left pad
 
         # Reset fields
-        self.is_warming_up_left = True
-        self.is_warming_up_right = True
+        self.__is_warming_up_left__ = True
+        self.__is_warming_up_right__ = True
         self.__state__ = None
 
         # Outputs
