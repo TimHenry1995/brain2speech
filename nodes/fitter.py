@@ -10,14 +10,17 @@ import collections
 from multiprocessing import Process, Pipe
 
 class Fitter(Node):
-    """This node manages the flow of incoming data to a models.fitter.Fitter object which runs on a parallel process."""
+    """This node manages the flow of incoming data to a models.fitter.Fitter object which runs on a parallel process.
+    It is expected to receive its input from a fitter"""
 
-    def __init__(self, min_time_frames_in_buffer: int) -> object:
+    def __init__(self, min_time_frames_in_buffer: int, stream_names: List[str]) -> object:
         """Constructor for this class.
         
         Inputs:
         - min_time_frames_in_buffer: The minimum number of time frames 
             that have to be in the buffer in order to send them to the models.Fitter object for fitting.
+        - stream_names: Assumed to be non-empty list of unique strings. The names of the streams. Each such name is used to identify a stream from the unifier.
+        
         """
 
         # Set attributes
@@ -25,10 +28,10 @@ class Fitter(Node):
         self.__reset_buffer__()
 
         # Set up parallel process
-        self.__pipe_end_point__, other_end_point = Pipe()
-        self.__parallel_process__ = Process(target=self.parallel_fitter, args=(other_end_point))
-        self.__parallel_process__.start()
-        self.__parallel_process_is_busy__ = False # The other process is only considered busy when it is currently processing data
+        #self.__pipe_end_point__, other_end_point = Pipe()
+        #self.__parallel_process__ = Process(target=self.parallel_fitter, args=(other_end_point))
+        #self.__parallel_process__.start()
+        #self.__parallel_process_is_busy__ = False # The other process is only considered busy when it is currently processing data
 
     def update(self) -> None:
         """Maintains a buffer of EEG, spectrogram and labels and submits it regularly to a models.fitter.Fitter object. 
@@ -44,7 +47,7 @@ class Fitter(Node):
         self.o.meta = self.i.meta
 
         # Take out x, y, labels
-        x_slice, y_slice, labels_slice = self.i.data()
+        x_slice, y_slice, labels_slice = self.i.data
 
         # Extend the buffer by the input
         if len(labels_slice) > 0: self.__extend_buffer__(x_slice=torch.Tensor(x_slice), y_slice=torch.Tensor(y_slice), labels_slice=labels_slice)

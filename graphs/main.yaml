@@ -20,6 +20,14 @@ graphs:
     - id: unifier
       module: nodes.unifier
       class: Unifier
+      params:
+        stream_names: [ {{SPEECH_STREAM_NAME}}, {{EEG_STREAM_NAME}}, {{LABEL_STREAM_NAME}} ]
+
+    - id: fitter
+      module: nodes.fitter
+      class: Fitter
+      params: 
+        min_time_frames_in_buffer: {{FITTER_MIN_TIME_FRAMES_IN_BUFFER}}
 
     - id: speech_monitor
       module: nodes.monitor
@@ -62,6 +70,8 @@ graphs:
         target: unifier:{{EEG_STREAM_NAME}}
       - source: sub:{{LABEL_STREAM_NAME}}
         target: unifier:{{LABEL_STREAM_NAME}}
+      - source: unifier
+        target: fitter
 
       # Monitoring
       - source: sub:{{SPEECH_STREAM_NAME}}
