@@ -1,7 +1,7 @@
 import torch
 from typing import List, Union, Tuple
 
-def to_batches_of_instances(x: torch.Tensor, time_frames_per_instance: int) -> torch.Tensor:
+def reshape_by_time_frame_count(x: torch.Tensor, time_frames_per_instance: int) -> torch.Tensor:
     """Splits x into a batches of instances.
     
     Inputs:
@@ -34,6 +34,7 @@ def reshape_by_label(x: torch.Tensor, labels: List[str], pause_string: str, y: t
     of shape [instance count, time frame count, feature count]. Note that initially x and y do not have to 
     have exactly instance count * time frame count rows since the labels input is used to identify instance boundaries.
     Padding is applied to the right of every instance if needed, but not on the left.
+    For efficiency it is recommended to use this function on x and y simultaneously rather than separately.
 
     Inputs:
     - x: The input to a neural network. Shape == [instance count * time frame count, x feature count]

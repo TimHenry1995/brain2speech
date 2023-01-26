@@ -26,7 +26,7 @@ class Fitter():
         self.__fit_y_buffer__ = []
 
     def fit(self, stationary_neural_network: torch.nn.Module, x: torch.Tensor, y: torch.Tensor, loss_function: Callable, optimizer: Callable,
-          instances_per_batch: int = 8, epoch_count: int = 25, validation_proportion: float = 0.3, 
+          instances_per_batch: int = 8, epoch_count: int = 25, validation_proportion: float = 0.33, 
           shuffle_seed: int = 42, is_final_slice: bool = None) -> Tuple[List[float], List[float]]:
         """Fits the stationary_neural_network to the data. 
         

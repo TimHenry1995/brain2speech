@@ -5,7 +5,7 @@ from models import utilities
 def test_to_batches_of_instances_A():
     x = torch.arange(start=0, end=28, step=1).reshape(shape=(7,4))
     y = torch.arange(start=0, end=24, step=1).reshape(shape=(2,3,4))
-    y_hat = utilities.to_batches_of_instances(x=x, time_frames_per_instance=3)
+    y_hat = utilities.reshape_by_time_frame_count(x=x, time_frames_per_instance=3)
 
     if torch.equal(y, y_hat): print("\tPassed unit test A for to_batches_of_instances.")
     else: print("\tFailed unit test A for to_batches_of_instances.")
