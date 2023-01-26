@@ -15,13 +15,17 @@ graphs:
       module: timeflux.nodes.zmq
       class: Sub
       params:
-        topics: [ spectrogram, eeg, marker ]
+        topics: [ {{SPEECH_STREAM_NAME}}, {{EEG_STREAM_NAME}}, {{LABEL_STREAM_NAME}} ]
 
-    - id: spectrogram_monitor
+    - id: unifier
+      module: nodes.unifier
+      class: Unifier
+
+    - id: speech_monitor
       module: nodes.monitor
       class: Imshow
       params:
-        name: spectrogram_monitor
+        name: speech_monitor
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
         title: "Speech"
         y_label: "Mel Bins"
@@ -39,11 +43,11 @@ graphs:
         height: 2.5
         is_visible: {{MONITOR_VISIBLE}}
 
-    - id: marker_monitor
+    - id: label_monitor
       module: nodes.monitor
       class: Text
       params:
-        name: marker_monitor
+        name: label_monitor
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
         title: "Words"
         y_label: ""
@@ -51,11 +55,20 @@ graphs:
         is_visible: {{MONITOR_VISIBLE}}
 
     edges:
-      - source: sub:spectrogram
-        target: spectrogram_monitor
-      - source: sub:eeg
+      # Data Processing
+      - source: sub:{{SPEECH_STREAM_NAME}}
+        target: unifier:{{SPEECH_STREAM_NAME}}
+      - source: sub:{{EEG_STREAM_NAME}}
+        target: unifier:{{EEG_STREAM_NAME}}
+      - source: sub:{{LABEL_STREAM_NAME}}
+        target: unifier:{{LABEL_STREAM_NAME}}
+
+      # Monitoring
+      - source: sub:{{SPEECH_STREAM_NAME}}
+        target: speech_monitor
+      - source: sub:{{EEG_STREAM_NAME}}
         target: eeg_monitor
-      - source: sub:marker
-        target: marker_monitor
+      - source: sub:{{LABEL_STREAM_NAME}}
+        target: label_monitor
     
     rate: {{MAIN_RATE}}

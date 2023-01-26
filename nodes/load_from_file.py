@@ -24,7 +24,8 @@ class Load_From_File(Node):
         self.name = name
         self.seconds_per_time_frame = seconds_per_time_frame
         self.__file_path__ = os.path.join(data_folder_path, f"{subject_identifier}_{stream_name}.npy")
-        
+        self.__stream_name__ = stream_name
+
         # Load data
         data = pd.DataFrame(np.load(self.__file_path__))
 
@@ -47,7 +48,7 @@ class Load_From_File(Node):
 
         # Set the output
         self.o.data = self.__data__.iloc[self.__index__:self.__index__ + time_frames_of_slice]
-        self.o.meta = {"file_path": self.__file_path__}
+        self.o.meta = {"file_path": self.__file_path__, "stream_name": self.__stream_name__}
 
         # Log
         if self.__index__ < len(self.__data__) and len(self.__data__) <= self.__index__  + time_frames_of_slice: 

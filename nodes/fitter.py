@@ -12,31 +12,31 @@ from multiprocessing import Process, Pipe
 class Fitter(Node):
     """This node manages the flow of incoming data to a models.fitter.Fitter object which runs on a parallel process."""
 
-    def __init__(self, min_unique_label_count_buffer: int) -> object:
+    def __init__(self, min_time_frames_in_buffer: int) -> object:
         """Constructor for this class.
         
         Inputs:
-        - min_unique_label_count_buffer: The minimum number of unique labels excluding the pause character '' 
-            that have to be in the buffer in order for it to flush them to the models.Fitter object for fitting.
+        - min_time_frames_in_buffer: The minimum number of time frames 
+            that have to be in the buffer in order to send them to the models.Fitter object for fitting.
         """
 
         # Set attributes
-        self.min_unique_label_count_buffer = min_unique_label_count_buffer
+        self.min_time_frames_in_buffer = min_time_frames_in_buffer
         self.__reset_buffer__()
 
         # Set up parallel process
         self.__pipe_end_point__, other_end_point = Pipe()
         self.__parallel_process__ = Process(target=self.parallel_fitter, args=(other_end_point))
         self.__parallel_process__.start()
-        self.__parallel_process_is_busy__ = False
+        self.__parallel_process_is_busy__ = False # The other process is only considered busy when it is currently processing data
 
     def update(self) -> None:
         """Maintains a buffer of EEG, spectrogram and labels and submits it regularly to a models.fitter.Fitter object. 
         That is, as data streams into this node in form of EEG features, speech spectrogram features and labels,
         it will store them in a buffer. It uses the label stream to count how many completed
-        labels it received. Once that number surpasses self.min_unique_label_count_buffer the buffer is flushed to a models.fitter.Fitter object which
+        labels it received. Once that number surpasses self.min_time_frames_in_buffer the buffer is flushed to a models.fitter.Fitter object which
         will fit a model on them. While the models.fitter.Fitter is busy this update function will buffer the new slices of
-        incoming data. As soon as the buffer surpasses self.min_unique_label_count_buffer the fitter node will take
+        incoming data. As soon as the buffer surpasses self.min_time_frames_in_buffer the fitter node will take
         the next opportunity to flush it to the models.fitter.Fitter and the cycle continues. 
         Here, opportunity means that the models.fitter.Fitter is ready for the next fit."""
         
@@ -59,34 +59,57 @@ class Fitter(Node):
             self.logger.info(f"Train loss: {torch.mean(train_losses)}, Validation loss: {torch.mean(validation_losses)}")
 
         # If the buffer is large enough and the parallel process is ready
-        if self.min_unique_label_count_buffer <= self.__unique_labels_buffer__ and not self.__parallel_process_is_busy__:
+        if self.min_time_frames_in_buffer <= len(self.__unique_labels_in_buffer__) and not self.__parallel_process_is_busy__:
             # Send the buffer via the pipe
             self.__pipe_end_point__.send((self.__x_buffer__, self.__y_buffer__, self.__labels_buffer__))
-
-            # Clear the buffer
-            self.__reset_buffer__()
 
             # Remember that the parallel process is busy
             self.__parallel_process_is_busy__ = True
 
+            # Clear the buffer
+            self.__reset_buffer__()
+
     def __reset_buffer__(self) -> None:
-        """Resets the buffer to empty deques."""
+        """Mutating function that resets the buffer to empty deques.
+        
+        Precondition:
+        - self.__x_buffer__, self.__y_buffer__, and self.__labels_buffer__ are non-existent attributes or collections, possibly empty.
+        - self.__time_frames_in_buffer__ is a non-existent attributes or an integer.
+
+        Inputs:
+        - None
+
+        Outputs:
+        - None
+
+        Postcondition:
+        - self.__x_buffer__, self.__y_buffer__, and self.__labels_buffer__ are empty deques.
+        - self.__time_frames_in_buffer__ is an integer equal to zero.
+        """
         self.__x_buffer__ = collections.deque()
         self.__y_buffer__ = collections.deque()
         self.__labels_buffer__ = collections.deque()
-        self.__unique_labels_buffer__ = collections.deque()
+        self.__time_frames_in_buffer__ = 0
 
     def __extend_buffer__(self, x_slice: torch.Tensor, y_slice: torch.TensorType, labels_slice: List[str]) -> None:
-        """Enter the new data into the buffer. All input slices need to have the same number of time points for the buffer to stay valid.
-        Assumes the slices contain at least 1 time frame.
+        """Mutating functions that enters the new data into the buffer. 
+        All input slices need to have the same number of time frames for the buffer to stay valid.
+        
+        Precondition:
+        - self.__x_buffer__, self.__y_buffer__, and self.__labels_buffer__ are collections, possibly empty.
+        - self.__time_frames_in_buffer__ is an integer.
 
         Inputs:
-        - x_slice: the x slice.
-        - y_slice: the y slice.
-        - labels_slice: the labels slice
+        - x_slice: the x slice to be added to the buffer.
+        - y_slice: the y slice to be added to the buffer.
+        - labels_slice: the labels slice to be added to the buffer.
         
         Outputs:
-        - None"""
+        - None
+        
+        Postcondition:
+        - self.__x_buffer__, self.__y_buffer__, and self.__labels_buffer__ got appended x_slice, y_slice and labels_slice, respectively.
+        - self.__time_frames_in_buffer__ got increased by the length of labels_slice."""
 
         # Input validity
         assert type(x_slice) == torch.Tensor, f"Expected x_slice to have type torch.Tensor, received {type(x_slice)}"
@@ -99,11 +122,8 @@ class Fitter(Node):
         self.__y_buffer__.append(y_slice)
         self.__labels_buffer__.append(labels_slice)
 
-        # Update the label count
-        new_unique_labels = set(labels_slice)
-        if '' in new_unique_labels: new_unique_labels.remove('') # The empty character is assumed to separate labels
-        self.__unique_labels_buffer__ += len(new_unique_labels)
-
+        # Update the number of time frames in the buffer
+        self.__time_frames_in_buffer__ += len(labels_slice)
 
     @staticmethod
     def parallel_fitter(pipe_end_point) -> None:
@@ -121,19 +141,21 @@ class Fitter(Node):
         optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
 
         while True:
-            # Take a slice
+            # Extract from the buffer
             x_buffer, y_buffer, labels_buffer = pipe_end_point.recv()
             x = torch.cat(list(x_buffer), dim=0) # Time axis
             y = torch.cat(list(y_buffer), dim=0) # Time axis
             labels = list(labels_buffer)
 
             # Reshape
-            x, y = utilities.reshape_by_label(x=x, labels=labels, pause_string='', y=y)
+            #x, y = utilities.reshape_by_label(x=x, labels=labels, pause_string='', y=y) # Shape == [instance count, time frame count, channel count] where each instance is one label
 
             # Fit
-            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=x, y=y, loss_function=torch.nn.MSELoss(), 
-                optimizer=optimizer, instances_per_batch = min(8, x.size()[0]//2), epoch_count = 5, is_final_slice=False)
-
+            print(x.shape)
+            print(y.shape)
+            #train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=x, y=y, loss_function=torch.nn.MSELoss(), 
+            #    optimizer=optimizer, instances_per_batch=(int)(x.size()[0]*0.66), epoch_count=5, validation_proportion=0.33, is_final_slice=False)
+            train_losses, validation_losses = torch.rand([1,10]); torch.rand([1,10])
             # Send the result
             pipe_end_point.send([train_losses, validation_losses])
 

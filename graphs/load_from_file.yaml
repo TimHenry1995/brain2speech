@@ -1,14 +1,14 @@
 graphs:
   - id: Publisher
     nodes:
-    - id: spectrogram_loader
+    - id: speech_loader
       module: nodes.load_from_file
       class: Load_From_File
       params:
-        name: spectrogram_loader
+        name: speech_loader
         data_folder_path: {{DATA_FOLDER_PATH}}
         subject_identifier: {{SUBJECT_IDENTIFIER}}
-        stream_name: spec
+        stream_name: {{SPEECH_STREAM_NAME}}
         seconds_per_time_frame: {{DATA_SECONDS_PER_TIME_FRAME}}
         proportion: {{DATA_PROPORTION}}
 
@@ -19,45 +19,45 @@ graphs:
         name: eeg_loader
         data_folder_path: {{DATA_FOLDER_PATH}}
         subject_identifier: {{SUBJECT_IDENTIFIER}}
-        stream_name: feat
+        stream_name: {{EEG_STREAM_NAME}}
         seconds_per_time_frame: {{DATA_SECONDS_PER_TIME_FRAME}}
         proportion: {{DATA_PROPORTION}}
 
-    - id: marker_loader
+    - id: label_loader
       module: nodes.load_from_file
       class: Load_From_File
       params:
-        name: marker_loader
+        name: label_loader
         data_folder_path: {{DATA_FOLDER_PATH}}
         subject_identifier: {{SUBJECT_IDENTIFIER}}
-        stream_name: procWords
+        stream_name: {{LABEL_STREAM_NAME}}
         seconds_per_time_frame: {{DATA_SECONDS_PER_TIME_FRAME}}
         proportion: {{DATA_PROPORTION}}
 
-    - id: spectrogram_pub
+    - id: speech_pub
       module: timeflux.nodes.zmq
       class: Pub
       params:
-        topic: spectrogram
+        topic: {{SPEECH_STREAM_NAME}}
         
     - id: eeg_pub
       module: timeflux.nodes.zmq
       class: Pub
       params:
-        topic: eeg
+        topic: {{EEG_STREAM_NAME}}
         
-    - id: marker_pub
+    - id: label_pub
       module: timeflux.nodes.zmq
       class: Pub
       params:
-        topic: marker
+        topic: {{LABEL_STREAM_NAME}}
 
     edges:
-    - source: spectrogram_loader
-      target: spectrogram_pub
+    - source: speech_loader
+      target: speech_pub
     - source: eeg_loader
       target: eeg_pub
-    - source: marker_loader
-      target: marker_pub
+    - source: label_loader
+      target: label_pub
 
     rate: {{MAIN_RATE}}
