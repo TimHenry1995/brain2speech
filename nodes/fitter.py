@@ -66,8 +66,10 @@ class Fitter(Node):
         # Take out x, y, labels
         eeg_slice = torch.Tensor(self.i.data[self.eeg_stream_name].values)
         speech_slice = torch.Tensor(self.i.data[self.speech_stream_name].values)
-        label_slice = self.i.data[self.label_stream_name].iloc[:,0].values.tolist()
-
+        try:
+            label_slice = self.i.data[self.label_stream_name].iloc[:,0].values.tolist()
+        except:
+            ppp=3
         # Extend the buffer by the input
         if len(label_slice) > 0: 
             self.__extend_buffer__(eeg_slice=eeg_slice, speech_slice=speech_slice, label_slice=label_slice)
@@ -185,10 +187,6 @@ class Fitter(Node):
             # Scale
             eeg=(eeg-torch.mean(eeg,axis=1).unsqueeze(1))/torch.std(eeg,axis=1).unsqueeze(1)
             
-            # Reshape
-            eeg, speech = utilities.reshape_by_label(x=eeg, labels=labels, pause_string='', y=speech) # Shape == [instance count, time frame count, channel count] where each instance is one label
-            instance_count = eeg.size()[0] # Corresponds to number of words shown on screen
-
             # Ensure neural network and optimizer exist
             if stationary_neural_network == None:
                 # Shapes
@@ -201,12 +199,19 @@ class Fitter(Node):
                 stationary_neural_network = neural_network_type(input_feature_count=eeg_feature_count, output_feature_count=speech_feature_count, is_streamable=False)
                 optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
 
+            # Reshape
+            eeg_reshaped, speech_reshaped = utilities.reshape_by_label(x=eeg, labels=labels, pause_string='', y=speech) # Shape == [instance count, time frame count, channel count] where each instance is one label
+            instance_count = eeg_reshaped.size()[0] # Corresponds to number of words shown on screen
+
             # Fit
             tick = time.time()
-            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=eeg, y=speech, loss_function=torch.nn.MSELoss(), optimizer=optimizer, instances_per_batch=(int)(0.66*instance_count), epoch_count=15, validation_proportion=0.33, is_final_slice=False, pad_axis=1)
+            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=eeg_reshaped, y=speech_reshaped, loss_function=torch.nn.MSELoss(), optimizer=optimizer, instances_per_batch=(int)(0.66*instance_count), epoch_count=15, validation_proportion=0.33, is_final_slice=False, pad_axis=1)
             print(f"Fit required {time.time()-tick} seconds.")
             # Save the progress
             torch.save(stationary_neural_network.state_dict(), os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', parameters_path + '.pt')))
+
+            # Plot train performance
+            Fitter.plot_x_target_and_output(x=eeg[:1024,:], target=speech[:1024,:], output=stationary_neural_network.predict(x=eeg[:1024,:]), labels=labels[:1024], pause_string='', path=os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters')), model_name=str(neural_network_type).split('.')[-1][:-2])
 
             # Send the result
             pipe_end_point.send([train_losses, validation_losses])
@@ -221,7 +226,8 @@ class Fitter(Node):
         self.__pipe_end_point__.close() # Close the connection to the parallel process
         return super().terminate()
 
-    def plot_x_target_and_output(self, x: torch.Tensor, target: torch.Tensor, output: torch.Tensor, labels: List[str], pause_string: str, path: str) -> None:
+    @staticmethod
+    def plot_x_target_and_output(x: torch.Tensor, target: torch.Tensor, output: torch.Tensor, labels: List[str], pause_string: str, path: str, model_name: str) -> None:
         """Plots x, the target and output.
         Inputs:
         - x: Input EEG time series. Shape == [time frame count, eeg channel count].
@@ -230,6 +236,7 @@ class Fitter(Node):
         - labels: The labels that indicate for each time frame of x, target and output which label was present at that time. Length == time frame count.
         - pause_string: The string used to indicate pauses.
         - path: Path to the folder where the figure should be stored.
+        - model_name: The name of the model used for the figure title.
 
         Assumptions:
         - x, target, output, labels are expected to have the same time frame count.
@@ -247,7 +254,7 @@ class Fitter(Node):
 
         # Figure
         fig=plt.figure()
-        plt.suptitle("Sample of Data Passed Through " + self.model_name)
+        plt.suptitle("Sample of Data Passed Through " + model_name)
 
         # Labels
         tick_locations = [0]

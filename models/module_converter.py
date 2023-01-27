@@ -85,7 +85,7 @@ class ConvTranspose1dConverter(ModuleConverter):
     @staticmethod
     def __convert__(module: object, target_type: Type) -> object:
         # Input validity
-        assert module.output_padding == 0, f"Any non-zero value for output_padding is not supported. Received {module.output_padding}."
+        assert module.output_padding == 0 or module.output_padding == (0,), f"Any non-zero value for output_padding is not supported. Received {module.output_padding}."
 
         # Create module equivalent
         new_module = target_type(in_channels = module.in_channels,

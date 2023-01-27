@@ -2,7 +2,7 @@ import torch
 
 class Sum(torch.nn.Module):
     def __init__(self) -> object:
-        pass
+        super(Sum, self).__init__()
 
-    def __forward__(self, input):
-        return torch.nn.sum(input=input)
+    def forward(self, input):
+        return input[0] + input[1]
