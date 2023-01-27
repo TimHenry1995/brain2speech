@@ -27,6 +27,7 @@ class Unifier(Node):
         self.__buffers__ = {stream_name: pd.DataFrame() for stream_name in stream_names}
         
     def update(self):
+        # Iterate Ports
         for _, _, port in self.iterate("i*"):
             if (port.ready()):
                 # Input validity

@@ -11,12 +11,14 @@ graphs:
 
   - id: Subscriber
     nodes:
+    # Subscription
     - id: sub
       module: timeflux.nodes.zmq
       class: Sub
       params:
         topics: [ {{SPEECH_STREAM_NAME}}, {{EEG_STREAM_NAME}}, {{LABEL_STREAM_NAME}} ]
 
+    # Data Processing
     - id: unifier
       module: nodes.unifier
       class: Unifier
@@ -36,6 +38,18 @@ graphs:
         neural_network_type: {{NEURAL_NETWORK_TYPE}}
         parameters_path: {{PARAMETERS_PATH}}
 
+    - id: predictor
+      module: nodes.predictor
+      class: Predictor
+      params:
+        name: predictor
+        eeg_stream_name: {{EEG_STREAM_NAME}}
+        speech_stream_name: {{SPEECH_STREAM_NAME}}
+        label_stream_name: {{LABEL_STREAM_NAME}}
+        neural_network_type: {{NEURAL_NETWORK_TYPE}}
+        parameters_path: {{PARAMETERS_PATH}}
+
+    # Monitoring
     - id: speech_monitor
       module: nodes.monitor
       class: Imshow
@@ -91,6 +105,14 @@ graphs:
         target: unifier:{{LABEL_STREAM_NAME}}
       - source: unifier
         target: fitter
+      - source: sub:{{EEG_STREAM_NAME}}
+        target: predictor:{{EEG_STREAM_NAME}}
+      - source: sub:{{LABEL_STREAM_NAME}}
+        target: predictor:{{LABEL_STREAM_NAME}}
+      - source: sub:{{SPEECH_STREAM_NAME}}
+        target: predictor:{{SPEECH_STREAM_NAME}}
+      - source: fitter
+        target: predictor:losses
 
       # Monitoring
       - source: sub:{{SPEECH_STREAM_NAME}}

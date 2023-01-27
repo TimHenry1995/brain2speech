@@ -60,6 +60,9 @@ class Fitter(Node):
         incoming data. As soon as the buffer surpasses self.min_time_frames_in_buffer the fitter node will take
         the next opportunity to send it to the models.fitter.Fitter and the cycle continues."""
         
+        # Exit if not yet ready
+        if not self.i.ready(): return super().update()
+
         # Take out x, y, labels
         eeg_slice = torch.Tensor(self.i.data[self.eeg_stream_name].values)
         speech_slice = torch.Tensor(self.i.data[self.speech_stream_name].values)
@@ -94,7 +97,7 @@ class Fitter(Node):
         # Set output
         time_points_in_slice = eeg_slice.size()[0]
         self.o.data = pd.DataFrame({'train': time_points_in_slice*[self.__mean_train_loss__], 'validation': time_points_in_slice*[self.__mean_validation_loss__]})
-        self.o.meta = {'stream_name': 'mean train and validation loss'}
+        self.o.meta = {'stream_name': 'losses'}
 
     def __reset_buffer__(self) -> None:
         """Mutating function that resets the buffer to empty deques.
