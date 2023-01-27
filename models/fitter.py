@@ -4,7 +4,8 @@ from abc import ABC
 from sklearn.utils import shuffle
 from typing import Tuple, Callable, List, Dict
 import sys
-
+sys.path.append('.')
+from models import utilities
 
 # Neural Network
 class Fitter():
@@ -27,7 +28,7 @@ class Fitter():
 
     def fit(self, stationary_neural_network: torch.nn.Module, x: torch.Tensor, y: torch.Tensor, loss_function: Callable, optimizer: Callable,
           instances_per_batch: int = 8, epoch_count: int = 25, validation_proportion: float = 0.33, 
-          shuffle_seed: int = 42, is_final_slice: bool = None) -> Tuple[List[float], List[float]]:
+          shuffle_seed: int = 42, is_final_slice: bool = None, pad_axis: int = None) -> Tuple[List[float], List[float]]:
         """Fits the stationary_neural_network to the data. 
         
         If this fitter is in stationary mode:
@@ -53,7 +54,8 @@ class Fitter():
         - epoch_count: number of iterations across training portion of the data.
         - validation_proportion: floating point number in range (0,1) indicating proportion of instances used for validation. The remaining proportion will be used for training.
         - shuffle_seed: the seed used to set the shuffle function of sklearn when shuffling instances generated from x.
-        - is_final_slice: optional in stationary mode, required in streamable mode. Indicates whether this is the final slice of the data stream.
+        - is_final_slice: ignored in stationary mode, required in streamable mode. Indicates whether this is the final slice of the data stream.
+        - pad_axis: ignored in stationary mode, optional in streamable mode. The slices that are received during fitting may need to be padded along a particular axis. With this input argument that axis can be specified. If None then no padding will be performed.
 
         Outputs:
         - train_lossess: Losses for train data per epoch.
@@ -71,6 +73,13 @@ class Fitter():
             # Insert it into the buffer
             self.__fit_x_buffer__.append(x)
             self.__fit_y_buffer__.append(y)
+            
+            # Optionally pad along specified axis
+            if pad_axis != None:
+                self.__fit_x_buffer__ = utilities.zero_pad_sequences(sequences=self.__fit_x_buffer__, axis=pad_axis)
+                self.__fit_y_buffer__ = utilities.zero_pad_sequences(sequences=self.__fit_y_buffer__, axis=pad_axis)
+                x = self.__fit_x_buffer__[-1]
+                y = self.__fit_y_buffer__[-1]
 
             # Copy the current x and y k times along the instance axis
             k = len(self.__fit_x_buffer__)
@@ -81,7 +90,6 @@ class Fitter():
             x_new = torch.concat(self.__fit_x_buffer__[:-1] + [x], dim=0)
             y_new = torch.concat(self.__fit_y_buffer__[:-1] + [y], dim=0)
 
-            
             # Rename
             x = x_new
             y = y_new

@@ -1,5 +1,5 @@
 import torch
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Any
 
 def reshape_by_time_frame_count(x: torch.Tensor, time_frames_per_instance: int) -> torch.Tensor:
     """Splits x into a batches of instances.
@@ -189,3 +189,55 @@ def stack_x(x: torch.Tensor, shift_count: int, shift_step_size: int) -> torch.Te
     # Outputs
     return x
 
+def flatten_list(nested_list: List[List[Any]]) -> List[Any]:
+    """Takes the elements of a nested list and puts them all in a single list.
+    
+    Inputs:
+    - nested_list: A list of lists. Each nested list contains objects.
+    
+    Outputs:
+    - flattened_list: A list that contains all the objects nested in the input list."""
+    
+    # Count number of labels
+    element_count = 0
+    for item in nested_list:
+        element_count += len(item)
+    
+    # Save them in a new array
+    i = 0
+    flattened_list = [None] * element_count
+    for item in nested_list: 
+        flattened_list[i:i+len(item)] = item
+        i += len(item)
+
+    # Outputs
+    return flattened_list
+
+def zero_pad_sequences(sequences: List[torch.Tensor], axis=1) -> List[torch.Tensor]:
+    """Pads the sequences such that their specified axis has the same number of time frames.
+    
+    Inputs:
+    - sequences: A list of tensors. Each tensor is expected to have shape reachable by axis.
+    - axis: The axis along which to pad.
+    
+    Outputs:
+    - padded_sequences: The same list but now all its tensors have the same number of frames along axis. 
+        That number is equal to the largest number of frames found in sequences along that axis. The extra time frames are zeros.
+    """
+
+    # Trivial case
+    if sequences == []: return sequences
+
+    # Get largest time frame count
+    largest_time_frame_count = sequences[0].size()[axis]
+    for sequence in sequences[1:]:
+        if largest_time_frame_count < sequence.size()[axis]: largest_time_frame_count = sequence.size()[axis]
+
+    # Pad
+    for s, sequence in enumerate(sequences):
+        size = list(sequence.size())
+        pad = torch.zeros(size=size[:axis] + [largest_time_frame_count - size[axis]] + size[axis+1:])
+        sequences[s] = torch.cat([sequence, pad], dim=axis)
+
+    # Outputs
+    return sequences

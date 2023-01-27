@@ -28,6 +28,11 @@ graphs:
       class: Fitter
       params: 
         min_time_frames_in_buffer: {{FITTER_MIN_TIME_FRAMES_IN_BUFFER}}
+        eeg_stream_name: {{EEG_STREAM_NAME}}
+        speech_stream_name: {{SPEECH_STREAM_NAME}}
+        label_stream_name: {{LABEL_STREAM_NAME}}
+        neural_network_type: {{NEURAL_NETWORK_TYPE}}
+        parameters_path: {{PARAMETERS_PATH}}
 
     - id: speech_monitor
       module: nodes.monitor

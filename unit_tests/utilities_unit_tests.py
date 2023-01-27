@@ -109,6 +109,29 @@ def test_stack_x_A():
     if torch.equal(y, y_hat): print("\tPassed unit test A for stack_x.")
     else: print("\tFailed unit test A for stack_x.")
 
+def test_zero_pad_sequences_A():
+
+    # Create some data
+    sequences = [torch.ones(size=[7,13,5]),
+                torch.ones(size=[6,17,2]),
+                torch.ones(size=[2,11,1])]
+    
+    # Get prediction
+    output = utilities.zero_pad_sequences(sequences=sequences, axis=1)
+
+    # Check whether they all kep their size along the other axes
+    valid = True
+    for t, tensor in enumerate(output):
+        valid = valid and (sequences[t].size()[0] == tensor.size()[0]) and (sequences[t].size()[2] == tensor.size()[2])
+
+    # Check whether the target axes now matches
+    time_frame_count = sequences[0].size()[1]
+    for tensor in output[1:]:
+        valid = valid and (tensor.size()[1] == time_frame_count)
+
+    # Evaluate
+    print("\tPassed" if valid else "\tFailed", "unit test A for zero_pad_sequences.")
+
 if __name__ == "__main__":
     print("\nUnit tests for models.utilities.")
     test_to_batches_of_instances_A()
@@ -117,3 +140,4 @@ if __name__ == "__main__":
     test_undo_reshape_by_label_A()
     test_undo_reshape_by_label_B()
     test_stack_x_A()
+    test_zero_pad_sequences_A()
