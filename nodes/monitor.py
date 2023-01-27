@@ -6,12 +6,13 @@ from abc import ABC
 import numpy as np
 import pandas as pd
 import time
+from typing import Tuple, List
 
 class Monitor(Node, ABC):
     """This is an abstract base class that provides monitoring capability for timeflux nodes. Every data 
     frame passed to the monitor is expected to have time points along the initial axis."""
 
-    def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, width: int=7, height: int=4, is_visible: bool = True) -> object:
+    def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, y_lim: Tuple[float, float] = None, legend: List[str] = None, width: int=7, height: int=4, is_visible: bool = True) -> object:
         """Constructor for this class.
         
         Inputs:
@@ -19,6 +20,8 @@ class Monitor(Node, ABC):
         - time_frames_in_buffer: Integer >=0. The number of time frames of streamed data that should stay in buffer.
         - title: Title of the figure.
         - y_label: The label to be shown on the vertical axis.
+        - y_lim: The limits of the y-axis. If None then they are inferred based on the range in the data.
+        - legend: The legend to be used. If None then it is ignored. Is not applicate to all monitors.
         - width: The width of the window.
         - height: The height of the widnow.
         - is_visible: Indicates whether the window should be shown on screen.
@@ -29,10 +32,12 @@ class Monitor(Node, ABC):
         # Super
         super(Monitor, self).__init__()
         
-        # Copy fields
+        # Copy attributes
         self.time_frames_in_buffer = time_frames_in_buffer
         self.name = name
         self.__is_visible__ = is_visible
+        self.legend = legend
+        self.y_lim = y_lim
 
         if is_visible:
             # Create a window
@@ -106,8 +111,12 @@ class Plot(Monitor):
         self.__ax__.plot(np.arange(-self.__buffer__.shape[0],0), self.__buffer__[:])
         
         # Set axes limits
-        self.__ax__.set_ylim(bottom=np.min(self.__buffer__), top=np.max(self.__buffer__))
+        if self.y_lim != None: self.__ax__.set_ylim(bottom=self.y_lim[0], top=self.y_lim[1])
+        else: self.__ax__.set_ylim(bottom=np.min(self.__buffer__), top=np.max(self.__buffer__))
         self.__ax__.set_xlim(left=-self.__buffer__.shape[0], right=0)
+
+        # Set legend
+        if self.legend != None: self.__ax__.legend(self.legend)
 
 class Imshow(Monitor):
     """Provides a monitor window a image streams."""

@@ -67,6 +67,19 @@ graphs:
         height: 2
         is_visible: {{MONITOR_VISIBLE}}
 
+    - id: loss_monitor
+      module: nodes.monitor
+      class: Plot
+      params:
+        name: loss_monitor
+        time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
+        title: "Loss"
+        y_label: "Mean Squared Error"
+        y_lim: [0, 50]
+        legend: [train, validation]
+        height: 4
+        is_visible: {{MONITOR_VISIBLE}}
+
     edges:
       # Data Processing
       - source: sub:{{SPEECH_STREAM_NAME}}
@@ -85,5 +98,7 @@ graphs:
         target: eeg_monitor
       - source: sub:{{LABEL_STREAM_NAME}}
         target: label_monitor
+      - source: fitter
+        target: loss_monitor
     
     rate: {{MAIN_RATE}}

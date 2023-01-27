@@ -1,5 +1,5 @@
 from timeflux.core.node import Node
-import matplotlib.pyplot as plt, numpy as np
+import matplotlib.pyplot as plt, numpy as np, pandas as pd
 from typing import List, Any
 import torch, os, sys, time
 from typing import List
@@ -40,6 +40,10 @@ class Fitter(Node):
         self.__parallel_process__.start()
         self.__parallel_process_is_busy__ = False # The other process is only considered busy when it is currently processing data
 
+        # Initialize output
+        self.__mean_train_loss__ = 0
+        self.__mean_validation_loss__ = 0
+
     def update(self) -> None:
         """Maintains a buffer of EEG, spectrogram and labels and submits it regularly to a models.fitter.Fitter object. 
         Expects to receive input in the form of a dictionary with keys for the eeg, speech and label streams and values for 
@@ -59,14 +63,15 @@ class Fitter(Node):
             self.__extend_buffer__(eeg_slice=eeg_slice, speech_slice=speech_slice, label_slice=label_slice)
 
         # Check whether the parallel process is done
-        
         if self.__pipe_end_point__.poll(): # Poll returns whether the pipe stores data from the parallel process
             # Remember this information
             self.__parallel_process_is_busy__ = False
             
             # Open its message and notify user
             train_losses, validation_losses = self.__pipe_end_point__.recv() # We expect just a single message from the parallel process, containing the loss of training and validation
-            self.logger.info("Train loss: " + str(np.round(np.mean(train_losses), decimals=2)) + " Validation loss: " + str(np.round(np.mean(validation_losses), decimals=2)))
+            self.__mean_train_loss__ = np.mean(train_losses)
+            self.__mean_validation_loss__ = np.mean(validation_losses)
+            self.logger.info("Train loss: " + str(np.round(self.__mean_train_loss__, decimals=2)) + " Validation loss: " + str(np.round(self.__mean_validation_loss__, decimals=2)))
         
         # If the buffer is large enough and the parallel process is ready
         if self.min_time_frames_in_buffer <= self.__time_frames_in_buffer__:# and not self.__parallel_process_is_busy__:
@@ -78,6 +83,11 @@ class Fitter(Node):
 
             # Clear the buffer
             self.__reset_buffer__()
+
+        # Set output
+        time_points_in_slice = eeg_slice.size()[0]
+        self.o.data = pd.DataFrame({'mean train loss': time_points_in_slice*[self.__mean_train_loss__], 'mean validation loss': time_points_in_slice*[self.__mean_validation_loss__]})
+        self.o.meta = {'stream_name': 'mean train and validation loss'}
 
     def __reset_buffer__(self) -> None:
         """Mutating function that resets the buffer to empty deques.
