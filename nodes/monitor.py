@@ -70,7 +70,7 @@ class Monitor(Node, ABC):
         pass
 
     def update(self) -> None:
-        if self.__is_visible__:
+        if self.__is_visible__ and self.i.ready():
             # Extract input
             if type(self.i.data) == pd.DataFrame:
                 new_data = self.i.data
@@ -81,15 +81,15 @@ class Monitor(Node, ABC):
                 self.logger.info(f"{self.name} received unsupported data type {type(self.i.data)}.")
                 return
             
-            # Propagate data through buffer
-            if hasattr(self, "__buffer__"): 
-                # Rename columns
-                self.__buffer__.columns = new_data.columns
-                self.__buffer__ = pd.concat([self.__buffer__, new_data], axis=0, ignore_index=True)
-                self.__buffer__ = self.__buffer__.iloc[-self.time_frames_in_buffer:,:]
-            else: 
-                self.__buffer__ = pd.DataFrame(np.zeros([self.time_frames_in_buffer] + list(new_data.shape[1:])))
-                self.__buffer__.iloc[self.time_frames_in_buffer - new_data.shape[0]:,:] = new_data 
+            # Initialize buffer
+            if not hasattr(self, "__buffer__"):  self.__buffer__ = pd.DataFrame(np.zeros([self.time_frames_in_buffer] + list(new_data.shape[1:])))
+            
+            # Update column names
+            self.__buffer__.columns = new_data.columns
+
+            # Propagate new data
+            self.__buffer__ = pd.concat([self.__buffer__, new_data], axis=0, ignore_index=True)
+            self.__buffer__ = self.__buffer__.iloc[-self.time_frames_in_buffer:,:]
 
             # Plot the new data
             self.__draw_buffer__()
@@ -97,6 +97,8 @@ class Monitor(Node, ABC):
             # Update canvas
             if hasattr(self, "__canvas__"): self.__canvas__.draw()
             self.__window__.update()
+            
+        else: return super().update()
 
     def __init_buffer__(self):
         """This function initializes the buffer."""
