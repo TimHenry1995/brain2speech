@@ -181,6 +181,9 @@ class Fitter(Node):
             eeg = torch.cat(list(eeg_buffer), dim=0) # Time axis
             speech = torch.cat(list(speech_buffer), dim=0) # Time axis
             labels = utilities.flatten_list(nested_list=list(label_buffer))
+
+            # Scale
+            eeg=(eeg-torch.mean(eeg,axis=1).unsqueeze(1))/torch.std(eeg,axis=1).unsqueeze(1)
             
             # Reshape
             eeg, speech = utilities.reshape_by_label(x=eeg, labels=labels, pause_string='', y=speech) # Shape == [instance count, time frame count, channel count] where each instance is one label
@@ -199,8 +202,9 @@ class Fitter(Node):
                 optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
 
             # Fit
-            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=eeg, y=speech, loss_function=torch.nn.MSELoss(), optimizer=optimizer, instances_per_batch=(int)(0.66*instance_count), epoch_count=5, validation_proportion=0.33, is_final_slice=False, pad_axis=1)
-            
+            tick = time.time()
+            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=eeg, y=speech, loss_function=torch.nn.MSELoss(), optimizer=optimizer, instances_per_batch=(int)(0.66*instance_count), epoch_count=15, validation_proportion=0.33, is_final_slice=False, pad_axis=1)
+            print(f"Fit required {time.time()-tick} seconds.")
             # Save the progress
             torch.save(stationary_neural_network.state_dict(), os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', parameters_path + '.pt')))
 

@@ -76,14 +76,21 @@ class Predictor(Node):
             neural_network_type = getattr(neural_networks, self.__neural_network_type__)
             
             # Initialize
-            self.streamable_neural_network = neural_network_type(input_feature_count=eeg_feature_count, output_feature_count=speech_feature_count, is_streamable=False)
+            self.streamable_neural_network = neural_network_type(input_feature_count=eeg_feature_count, output_feature_count=speech_feature_count, is_streamable=True)
             
         # Load the latest model
         if loss_changed:
             self.streamable_neural_network.load_state_dict(torch.load(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', self.parameters_path + '.pt'))))
             print("Loaded")
         
+        # Scale
+        eeg=(eeg-torch.mean(eeg,axis=1).unsqueeze(1))/torch.std(eeg,axis=1).unsqueeze(1)
+
         # Predict
+        speech_predicted = self.streamable_neural_network.predict(x=eeg.unsqueeze(0), is_final_slice=False).squeeze()
+
+        # Output
+        self.o.data = pd.DataFrame(speech_predicted.detach().numpy())
 
     def __did_loss_change__(self, losses: pd.Series) -> bool:
         """Mutating method that determines whether the loss changed between the last time frame of the previous loss slice and any of the current time frames.

@@ -115,7 +115,7 @@ graphs:
         target: predictor:losses
 
       # Monitoring
-      - source: sub:{{SPEECH_STREAM_NAME}}
+      - source: predictor
         target: speech_monitor
       - source: sub:{{EEG_STREAM_NAME}}
         target: eeg_monitor
