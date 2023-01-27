@@ -9,8 +9,10 @@ import time
 from typing import Tuple, List
 
 class Monitor(Node, ABC):
-    """This is an abstract base class that provides monitoring capability for timeflux nodes. Every data 
-    frame passed to the monitor is expected to have time points along the initial axis."""
+    """This is an abstract base class that provides monitoring capability for timeflux nodes. It Every data 
+    frame passed to the monitor is expected to have time points along the initial axis.
+    These nodes expect a certain number of input streams (see child class description).
+    They do not have output streams."""
 
     def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, y_lim: Tuple[float, float] = None, width: int=7, height: int=4, is_visible: bool = True) -> object:
         """Constructor for this class.
@@ -101,7 +103,10 @@ class Monitor(Node, ABC):
         self.__buffer__
 
 class Plot(Monitor):
-    """Provides a monitor window for line graph streams. It allows to plot multiple lines simultaneously."""
+    """Provides a monitor window for a line graph. It expects one stream of numeric data. 
+    If the stream contains multiple columns then this node plots multiple lines simultaneously.
+    It creates a legend using the column names."""
+
     def __draw_buffer__(self) -> None:
         # Reset old plot
         self.__ax__.set_prop_cycle(None)
@@ -119,12 +124,13 @@ class Plot(Monitor):
         self.__ax__.legend(list(self.__buffer__.columns))
 
 class Imshow(Monitor):
-    """Provides a monitor window a image streams."""
+    """Provides a monitor window a single image stream."""
+
     def __draw_buffer__(self) -> None:
         self.__ax__.imshow(np.flipud(np.array(self.__buffer__.values).transpose()))
 
 class Text(Monitor):
-    """Provides a monitor window a text stream."""
+    """Provides a monitor window a single text stream."""
 
     def __draw_buffer__(self) -> None:
         # Reset old text

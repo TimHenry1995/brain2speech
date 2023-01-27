@@ -11,7 +11,9 @@ from multiprocessing import Process, Pipe
 from multiprocessing.connection import Connection
 
 class Fitter(Node):
-    """This node manages the flow of incoming data to a models.fitter.Fitter object which runs on a parallel process."""
+    """This node manages the flow of incoming data to a models.fitter.Fitter object which runs on a parallel process.
+    It expects a single input stream of a tuple that contains time courses for eeg features, speech spectrogram and label. 
+    It has one output stream which is a data frame with columns for mean train and validation loss."""
 
     def __init__(self, name: str, min_time_frames_in_buffer: int, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str) -> object:
         """Constructor for this class.

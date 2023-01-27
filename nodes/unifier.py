@@ -4,10 +4,9 @@ from typing import List
 import pandas as pd
 
 class Unifier(Node):
-    """This node collects inputs from several ports. It buffers them and outputs a a tuple that contains
-    dataframes with the common time frames of these inputs."""
+    """This node collects inputs from a variables number of ports. It buffers them and outputs a single stream 
+    of a tuple that contains dataframes with the common time frames of these inputs."""
     
-
     def __init__(self, name, stream_names: List[str]) -> object:
         """Constructor for this class.
         

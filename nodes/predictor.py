@@ -2,6 +2,9 @@ from timeflux.core.node import Node
 
 
 class Predictor(Node):
+    """This node predicts the speech spectrogram based on eeg.
+    It expects as input streams the eeg feature time course and the label time course. 
+    It has one output stream for the speech spectrogram."""
 
     def __init__(self, name: str, eeg_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str) -> object:
         """Constructor for this class.

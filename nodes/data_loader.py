@@ -5,6 +5,8 @@ import os
 import time
 
 class DataLoader(Node):
+    """This node loads data. It does not expect an input stream. It has one output stream which is a 
+    dataframe of temporal slice of the matrix stored at the specified path. The time axis is assumed to be the 0th axis."""
 
     def __init__(self, name: str, data_folder_path: str, subject_identifier: str, stream_name: str, seconds_per_time_frame: float, proportion: float) -> object:
         """Constructor for this class.
