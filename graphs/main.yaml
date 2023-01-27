@@ -1,5 +1,5 @@
 import:
-- load_from_file.yaml
+- data_loader.yaml
 
 graphs:
 
@@ -21,12 +21,14 @@ graphs:
       module: nodes.unifier
       class: Unifier
       params:
+        name: unifier
         stream_names: [ {{SPEECH_STREAM_NAME}}, {{EEG_STREAM_NAME}}, {{LABEL_STREAM_NAME}} ]
 
     - id: fitter
       module: nodes.fitter
       class: Fitter
       params: 
+        name: fitter
         min_time_frames_in_buffer: {{FITTER_MIN_TIME_FRAMES_IN_BUFFER}}
         eeg_stream_name: {{EEG_STREAM_NAME}}
         speech_stream_name: {{SPEECH_STREAM_NAME}}

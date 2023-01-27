@@ -33,8 +33,8 @@ class Monitor(Node, ABC):
         super(Monitor, self).__init__()
         
         # Copy attributes
-        self.time_frames_in_buffer = time_frames_in_buffer
         self.name = name
+        self.time_frames_in_buffer = time_frames_in_buffer
         self.__is_visible__ = is_visible
         self.legend = legend
         self.y_lim = y_lim

@@ -13,10 +13,11 @@ from multiprocessing.connection import Connection
 class Fitter(Node):
     """This node manages the flow of incoming data to a models.fitter.Fitter object which runs on a parallel process."""
 
-    def __init__(self, min_time_frames_in_buffer: int, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str) -> object:
+    def __init__(self, name: str, min_time_frames_in_buffer: int, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str) -> object:
         """Constructor for this class.
         
         Inputs:
+        - name: The name assigned to this node.
         - min_time_frames_in_buffer: The minimum number of time frames 
             that have to be in the buffer in order to send them to the models.Fitter object for fitting.
         - eeg_stream_name, speech_stream_name, label_stream_name: The names of the streams. Each such name is used to identify a stream from the unifier.
@@ -24,7 +25,11 @@ class Fitter(Node):
         - parameters_path: The path to the file where the neural network parameters shall be stored after each fit operation. This path is relative to the parameters directory.
         """
 
+        # Super
+        super(Fitter, self).__init__()
+
         # Copy attributes
+        self.name = name
         self.min_time_frames_in_buffer = min_time_frames_in_buffer
         self.eeg_stream_name = eeg_stream_name
         self.speech_stream_name = speech_stream_name

@@ -4,7 +4,7 @@ from timeflux.core.node import Node
 import os
 import time
 
-class Load_From_File(Node):
+class DataLoader(Node):
 
     def __init__(self, name: str, data_folder_path: str, subject_identifier: str, stream_name: str, seconds_per_time_frame: float, proportion: float) -> object:
         """Constructor for this class.
@@ -20,6 +20,9 @@ class Load_From_File(Node):
         Outputs:
         - self: The initialized instance."""
         
+        # Super
+        super(DataLoader, self).__init__()
+
         # Copy fields
         self.name = name
         self.seconds_per_time_frame = seconds_per_time_frame

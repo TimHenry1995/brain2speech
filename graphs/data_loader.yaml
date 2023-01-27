@@ -2,8 +2,8 @@ graphs:
   - id: Publisher
     nodes:
     - id: speech_loader
-      module: nodes.load_from_file
-      class: Load_From_File
+      module: nodes.data_loader
+      class: DataLoader
       params:
         name: speech_loader
         data_folder_path: {{DATA_FOLDER_PATH}}
@@ -13,8 +13,8 @@ graphs:
         proportion: {{DATA_PROPORTION}}
 
     - id: eeg_loader
-      module: nodes.load_from_file
-      class: Load_From_File
+      module: nodes.data_loader
+      class: DataLoader
       params:
         name: eeg_loader
         data_folder_path: {{DATA_FOLDER_PATH}}
@@ -24,8 +24,8 @@ graphs:
         proportion: {{DATA_PROPORTION}}
 
     - id: label_loader
-      module: nodes.load_from_file
-      class: Load_From_File
+      module: nodes.data_loader
+      class: DataLoader
       params:
         name: label_loader
         data_folder_path: {{DATA_FOLDER_PATH}}

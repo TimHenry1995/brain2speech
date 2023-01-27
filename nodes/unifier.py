@@ -8,14 +8,21 @@ class Unifier(Node):
     dataframes with the common time frames of these inputs."""
     
 
-    def __init__(self, stream_names: List[str]) -> object:
+    def __init__(self, name, stream_names: List[str]) -> object:
         """Constructor for this class.
         
         Inputs:
+        - name: The name assigned to this node.
         - stream_names: Assumed to be non-empty list of unique strings. The names of the streams. Each such name is used to identify a port and save its data in its corresponding buffer.
         
         Outputs:
         - self: initialized instance of this class."""
+
+        # Super
+        super(Unifier, self).__init__()
+
+        # Copy attributes
+        self.name = name
 
         # Initialize buffers
         self.__buffers__ = {stream_name: pd.DataFrame() for stream_name in stream_names}
