@@ -20,7 +20,7 @@ class Fitter(Node):
         - name: The name assigned to this node.
         - min_time_frames_in_buffer: The minimum number of time frames 
             that have to be in the buffer in order to send them to the models.Fitter object for fitting.
-        - eeg_stream_name, speech_stream_name, label_stream_name: The names of the streams. Each such name is used to identify a stream from the unifier.
+        - eeg_stream_name, speech_stream_name, label_stream_name: The names of the streams. Each such name is used to identify a stream from the input ports.
         - neural_network_type: The type of the neural network to be trained, e.g. Dense or Convolutional. This type will be taken from models.neural_networks.
         - parameters_path: The path to the file where the neural network parameters shall be stored after each fit operation. This path is relative to the parameters directory.
         """
@@ -91,7 +91,7 @@ class Fitter(Node):
 
         # Set output
         time_points_in_slice = eeg_slice.size()[0]
-        self.o.data = pd.DataFrame({'mean train loss': time_points_in_slice*[self.__mean_train_loss__], 'mean validation loss': time_points_in_slice*[self.__mean_validation_loss__]})
+        self.o.data = pd.DataFrame({'train': time_points_in_slice*[self.__mean_train_loss__], 'validation': time_points_in_slice*[self.__mean_validation_loss__]})
         self.o.meta = {'stream_name': 'mean train and validation loss'}
 
     def __reset_buffer__(self) -> None:

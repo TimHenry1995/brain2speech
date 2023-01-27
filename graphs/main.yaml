@@ -78,7 +78,6 @@ graphs:
         title: "Loss"
         y_label: "Mean Squared Error"
         y_lim: [0, 50]
-        legend: [train, validation]
         height: 4
         is_visible: {{MONITOR_VISIBLE}}
 

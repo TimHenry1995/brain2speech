@@ -12,7 +12,7 @@ class Monitor(Node, ABC):
     """This is an abstract base class that provides monitoring capability for timeflux nodes. Every data 
     frame passed to the monitor is expected to have time points along the initial axis."""
 
-    def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, y_lim: Tuple[float, float] = None, legend: List[str] = None, width: int=7, height: int=4, is_visible: bool = True) -> object:
+    def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, y_lim: Tuple[float, float] = None, width: int=7, height: int=4, is_visible: bool = True) -> object:
         """Constructor for this class.
         
         Inputs:
@@ -21,7 +21,6 @@ class Monitor(Node, ABC):
         - title: Title of the figure.
         - y_label: The label to be shown on the vertical axis.
         - y_lim: The limits of the y-axis. If None then they are inferred based on the range in the data.
-        - legend: The legend to be used. If None then it is ignored. Is not applicate to all monitors.
         - width: The width of the window.
         - height: The height of the widnow.
         - is_visible: Indicates whether the window should be shown on screen.
@@ -36,7 +35,6 @@ class Monitor(Node, ABC):
         self.name = name
         self.time_frames_in_buffer = time_frames_in_buffer
         self.__is_visible__ = is_visible
-        self.legend = legend
         self.y_lim = y_lim
 
         if is_visible:
@@ -73,9 +71,9 @@ class Monitor(Node, ABC):
         if self.__is_visible__:
             # Extract input
             if type(self.i.data) == pd.DataFrame:
-                new_data = self.i.data.to_numpy()
-            elif type(self.i.data) == np.ndarray:
                 new_data = self.i.data
+            elif type(self.i.data) == np.ndarray:
+                new_data = pd.DataFrame(self.i.data)
             elif self.i.data == None: return
             else:
                 self.logger.info(f"{self.name} received unsupported data type {type(self.i.data)}.")
@@ -83,11 +81,13 @@ class Monitor(Node, ABC):
             
             # Propagate data through buffer
             if hasattr(self, "__buffer__"): 
-                self.__buffer__ = np.concatenate([self.__buffer__, new_data], axis=0)
-                self.__buffer__ = self.__buffer__[-self.time_frames_in_buffer:]
+                # Rename columns
+                self.__buffer__.columns = new_data.columns
+                self.__buffer__ = pd.concat([self.__buffer__, new_data], axis=0, ignore_index=True)
+                self.__buffer__ = self.__buffer__.iloc[-self.time_frames_in_buffer:,:]
             else: 
-                self.__buffer__ = np.zeros([self.time_frames_in_buffer] + list(new_data.shape[1:]), dtype=new_data.dtype)
-                self.__buffer__[self.time_frames_in_buffer - new_data.shape[0]:] = new_data 
+                self.__buffer__ = pd.DataFrame(np.zeros([self.time_frames_in_buffer] + list(new_data.shape[1:])))
+                self.__buffer__.iloc[self.time_frames_in_buffer - new_data.shape[0]:,:] = new_data 
 
             # Plot the new data
             self.__draw_buffer__()
@@ -108,7 +108,7 @@ class Plot(Monitor):
         if hasattr(self.__ax__, "lines"): self.__ax__.lines = []
         
         # Plot new data
-        self.__ax__.plot(np.arange(-self.__buffer__.shape[0],0), self.__buffer__[:])
+        self.__ax__.plot(np.arange(-self.__buffer__.shape[0],0), self.__buffer__.values)
         
         # Set axes limits
         if self.y_lim != None: self.__ax__.set_ylim(bottom=self.y_lim[0], top=self.y_lim[1])
@@ -116,12 +116,12 @@ class Plot(Monitor):
         self.__ax__.set_xlim(left=-self.__buffer__.shape[0], right=0)
 
         # Set legend
-        if self.legend != None: self.__ax__.legend(self.legend)
+        self.__ax__.legend(list(self.__buffer__.columns))
 
 class Imshow(Monitor):
     """Provides a monitor window a image streams."""
     def __draw_buffer__(self) -> None:
-        self.__ax__.imshow(self.__buffer__.transpose())
+        self.__ax__.imshow(np.flipud(np.array(self.__buffer__.values).transpose()))
 
 class Text(Monitor):
     """Provides a monitor window a text stream."""
@@ -130,8 +130,8 @@ class Text(Monitor):
         # Reset old text
         if hasattr(self.__ax__, "texts"): self.__ax__.texts = [] 
 
-        for t, time_frame in enumerate(self.__buffer__[1:]):
-            if time_frame != self.__buffer__[t]:
+        for t, time_frame in enumerate(self.__buffer__.iloc[1:,0].values.tolist()):
+            if time_frame != self.__buffer__.iloc[t,0]:
                 self.__ax__.text(t-self.time_frames_in_buffer,0.5,time_frame)
 
         self.__ax__.set_xlim(left=-self.time_frames_in_buffer, right=0)
