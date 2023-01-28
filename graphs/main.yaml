@@ -36,8 +36,9 @@ graphs:
         speech_stream_name: {{SPEECH_STREAM_NAME}}
         label_stream_name: {{LABEL_STREAM_NAME}}
         neural_network_type: {{NEURAL_NETWORK_TYPE}}
-        parameters_path: {{PARAMETERS_PATH}}
-        skip: {{NEURAL_NETWORK_SKIP_FITTER}}
+        parameters_path: {{NEURAL_NETWORK_PARAMETERS_PATH}}
+        start_from_prefit: {{FITTER_START_FROM_PREFIT}}
+        skip: {{FITTER_SKIP}}
 
     - id: predictor
       module: nodes.predictor
@@ -48,8 +49,8 @@ graphs:
         speech_stream_name: {{SPEECH_STREAM_NAME}}
         label_stream_name: {{LABEL_STREAM_NAME}}
         neural_network_type: {{NEURAL_NETWORK_TYPE}}
-        parameters_path: {{PARAMETERS_PATH}}
-        skip: {{NEURAL_NETWORK_SKIP_PREDICTOR}}
+        parameters_path: {{NEURAL_NETWORK_PARAMETERS_PATH}}
+        skip: {{PREDICTOR_SKIP}}
 
     - id: vocgan
       module: nodes.vocgan
@@ -99,7 +100,7 @@ graphs:
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
         title: "Loss"
         y_label: "Mean Squared Error"
-        y_lim: [0, 60]
+        y_lower: 0
         height: 2.5
         is_visible: {{MONITOR_LOSS_VISIBLE}}
 
@@ -111,7 +112,8 @@ graphs:
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER_WAVEFORM}}
         title: "Speech Waveform"
         y_label: "Amplitude"
-        y_lim: [-1.5, 1.5]
+        y_lower: -1.25
+        y_upper: 1.25
         height: 2.5
         is_visible: {{MONITOR_WAVEFORM_VISIBLE}}
 

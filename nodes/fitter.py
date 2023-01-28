@@ -15,7 +15,7 @@ class Fitter(Node):
     It expects a single input stream of a tuple that contains time courses for eeg features, speech spectrogram and label. 
     It has one output stream which is a data frame with columns for mean train and validation loss."""
 
-    def __init__(self, name: str, min_time_frames_in_buffer: int, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str, skip: bool) -> object:
+    def __init__(self, name: str, min_time_frames_in_buffer: int, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str, start_from_prefit: bool, skip: bool) -> object:
         """Constructor for this class.
         
         Inputs:
@@ -25,7 +25,8 @@ class Fitter(Node):
         - eeg_stream_name, speech_stream_name, label_stream_name: The names of the streams. Each such name is used to identify a stream from the input ports.
         - neural_network_type: The type of the neural network to be trained, e.g. Dense or Convolutional. This type will be taken from models.neural_networks.
         - parameters_path: The path to the file where the neural network parameters shall be stored after each fit operation. This path is relative to the parameters directory.
-        - skip_fitting: Indicates whether the fitting shall be skipped. If True then no output is given in update().
+        - start_from_prefit: Indicates whether the neural network should load the network parameters from parameters_path before the first fit iteration. If set to False then fitting starts from random parameters.
+        - skip: Indicates whether the fitting shall be skipped. If True then no output is given in update().
         """
 
         # Super
@@ -38,6 +39,7 @@ class Fitter(Node):
         self.speech_stream_name = speech_stream_name
         self.label_stream_name = label_stream_name
         self.__skip__ = skip
+        parameters_path = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', parameters_path + '.pt'))
         
         # Set the buffer
         self.__reset_buffer__()
@@ -45,7 +47,7 @@ class Fitter(Node):
         if not skip:
             # Set up parallel process
             self.__pipe_end_point__, other_end_point = Pipe()
-            self.__parallel_process__ = Process(target=self.parallel_fitter, args=([other_end_point, neural_network_type, parameters_path]))
+            self.__parallel_process__ = Process(target=self.parallel_fitter, args=([other_end_point, neural_network_type, parameters_path, start_from_prefit]))
             self.__parallel_process__.daemon = True # Ensures that the parallel process is killed when the main process is killed.
             self.__parallel_process__.start()
             self.__parallel_process_is_busy__ = False # The other process is only considered busy when it is currently processing data
@@ -164,7 +166,7 @@ class Fitter(Node):
         self.__time_frames_in_buffer__ += len(label_slice)
 
     @staticmethod
-    def parallel_fitter(pipe_end_point: Connection, neural_network_type: str, parameters_path: str) -> None:
+    def parallel_fitter(pipe_end_point: Connection, neural_network_type: str, parameters_path: str, start_from_prefit: bool) -> None:
         """This function feeds the data its receives via the pipe to a models.Fitter object. It should be run on a separate process.
         It expects an initial data slice via the pipe. It will then do one fitting routine and when it is finished it will send the 
         validation and train loss via the pipe. Thereafter it is ready for the next data.
@@ -174,6 +176,7 @@ class Fitter(Node):
             eeg and spectrogram slices and a nested list of label slices. The enpoint is used to send the training and validation losses as lists of floats, respectively.
         - neural_network_type: The type of the neural network to be trained, e.g. Dense or Convolutional. This type will be taken from models.neural_networks.
         - parameters_path: The path to the file where the neural network parameters shall be stored after each fit operation. This path is relative to the parameters directory.
+        - start_from_prefit: Indicates whether the neural network should load the network parameters from parameters_path before the first fit iteration. If set to False then fitting starts from random parameters.
         """
 
         # Create a fitter
@@ -203,6 +206,12 @@ class Fitter(Node):
                 
                 # Initialize
                 stationary_neural_network = neural_network_type(input_feature_count=eeg_feature_count, output_feature_count=speech_feature_count, is_streamable=False)
+                
+                # Optionally load parameters
+                if start_from_prefit and os.path.exists(parameters_path):
+                    stationary_neural_network.load_state_dict(torch.load(parameters_path))
+
+                # Construct optimizer
                 optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
 
             # Reshape
@@ -213,11 +222,9 @@ class Fitter(Node):
             tick = time.time()
             train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=eeg_reshaped, y=speech_reshaped, loss_function=torch.nn.MSELoss(), optimizer=optimizer, instances_per_batch=(int)(0.66*instance_count), epoch_count=15, validation_proportion=0.33, is_final_slice=False, pad_axis=1)
             print(f"Fit required {time.time()-tick} seconds.")
+            
             # Save the progress
-            torch.save(stationary_neural_network.state_dict(), os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', parameters_path + '.pt')))
-
-            # Plot train performance
-            #Fitter.plot_x_target_and_output(x=eeg[:1024,:], target=speech[:1024,:], output=stationary_neural_network.predict(x=eeg[:1024,:]), labels=labels[:1024], pause_string='', path=os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters')), model_name=str(neural_network_type).split('.')[-1][:-2])
+            torch.save(stationary_neural_network.state_dict(), parameters_path)
 
             # Send the result
             pipe_end_point.send([train_losses, validation_losses])

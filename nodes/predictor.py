@@ -31,7 +31,7 @@ class Predictor(Node):
         self.__speech_stream_name__ = speech_stream_name
         self.__label_stream_name__ = label_stream_name
         self.__neural_network_type__ = neural_network_type
-        self.parameters_path = parameters_path
+        self.parameters_path = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', parameters_path + '.pt'))
         self.skip = skip
 
         # Set variable for neural network
@@ -88,11 +88,16 @@ class Predictor(Node):
             # Initialize
             self.streamable_neural_network = neural_network_type(input_feature_count=eeg_feature_count, output_feature_count=speech_feature_count, is_streamable=True)
             
+            # Load
+            if os.path.exists(self.parameters_path):
+                self.streamable_neural_network.load_state_dict(torch.load(self.parameters_path))
+                self.logger.info("Loaded parameters.")
+                
         # Load the latest model
         if loss_changed:
-            self.streamable_neural_network.load_state_dict(torch.load(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', self.parameters_path + '.pt'))))
-            print("Loaded")
-        
+            self.streamable_neural_network.load_state_dict(torch.load(self.parameters_path))
+            self.logger.info("Loaded parameters.")
+
         # Scale
         eeg=(eeg-torch.mean(eeg,axis=1).unsqueeze(1))/torch.std(eeg,axis=1).unsqueeze(1)
 
