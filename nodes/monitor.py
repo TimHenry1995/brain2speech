@@ -14,7 +14,7 @@ class Monitor(Node, ABC):
     These nodes expect a certain number of input streams (see child class description) of type numpy.ndarray or pandas.DataFrame.
     They do not have output streams."""
 
-    def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, y_lim: Tuple[float, float] = None, width: int=7, height: int=4, is_visible: bool = True) -> object:
+    def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, y_lower: float = None, y_upper: float = None, width: int=7, height: int=4, is_visible: bool = True) -> object:
         """Constructor for this class.
         
         Inputs:
@@ -22,7 +22,7 @@ class Monitor(Node, ABC):
         - time_frames_in_buffer: Integer >=0. The number of time frames of streamed data that should stay in buffer.
         - title: Title of the figure.
         - y_label: The label to be shown on the vertical axis.
-        - y_lim: The limits of the y-axis. If None then they are inferred based on the range in the data.
+        - y_lower, y_upper: The limits to the y-axis given separately. If not specified then each is inferred from the data stream.
         - width: The width of the window.
         - height: The height of the widnow.
         - is_visible: Indicates whether the window should be shown on screen.
@@ -37,7 +37,8 @@ class Monitor(Node, ABC):
         self.name = name
         self.time_frames_in_buffer = time_frames_in_buffer
         self.__is_visible__ = is_visible
-        self.y_lim = y_lim
+        self.y_lower = y_lower
+        self.y_upper = y_upper
 
         if is_visible:
             # Create a window
@@ -119,8 +120,10 @@ class Plot(Monitor):
         self.__ax__.plot(np.arange(-self.__buffer__.shape[0],0), self.__buffer__.values)
         
         # Set axes limits
-        if self.y_lim != None: self.__ax__.set_ylim(bottom=self.y_lim[0], top=self.y_lim[1])
-        else: self.__ax__.set_ylim(bottom=np.min(self.__buffer__), top=np.max(self.__buffer__))
+        y_lim = [self.y_lower, self.y_upper]
+        if self.y_lower is None: y_lim[0] = 1.2 * np.min(self.__buffer__.values)
+        if self.y_upper is None: y_lim[1] = 1.2 * np.max(self.__buffer__.values)
+        self.__ax__.set_ylim(bottom=y_lim[0], top=y_lim[1])
         self.__ax__.set_xlim(left=-self.__buffer__.shape[0], right=0)
 
         # Set legend
