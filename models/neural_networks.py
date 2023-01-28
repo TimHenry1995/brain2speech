@@ -1,4 +1,5 @@
 import torch, scipy
+from scipy.io import wavfile
 from abc import ABC
 from sklearn.utils import shuffle
 from typing import Union, List, Dict, Tuple
@@ -14,7 +15,7 @@ import numpy as np
 class NeuralNetwork(torch.nn.Module, ABC):
     """This class provides functionality for neural networks that can be used in streamable and stationary mode."""
 
-    def __init__(self, is_streamable: bool) -> object:
+    def __init__(self, is_streamable: bool, name: str = "Neural Network") -> object:
         """Constructor for this class. The inheriting subclasses are expected to behave as follows:
         0. Call this super initializer.
         1. Create a dictionary that gives for a module name its corresponding stationary module, e.g. convertible_modules = {'linear_1': torch.nn.Linear(...), 'linear_2': torch.nn.Linear(...)}
@@ -28,10 +29,12 @@ class NeuralNetwork(torch.nn.Module, ABC):
         
         Inputs:
         - is_streamable: Indicates whether this neural network shall be used in streamable or stationary mode.
+        - name: The name of this neural network.
         """
         super(NeuralNetwork, self).__init__()
 
         self.__is_streamable__ = is_streamable
+        self.name = name
 
     @staticmethod
     def __to_streamable__(modules: Dict[str,torch.nn.Module]) -> Dict[str,streamable.Module]:
@@ -79,18 +82,19 @@ class NeuralNetwork(torch.nn.Module, ABC):
 class Dense(NeuralNetwork):
     """This class is a dense neural network."""
 
-    def __init__(self, input_feature_count: int, output_feature_count: int, is_streamable: bool = False) -> object:
+    def __init__(self, input_feature_count: int, output_feature_count: int, is_streamable: bool = False, name: str = "Dense") -> object:
         """Constructor for this class.
         
         Inputs:
         - input_feature_count: number of input features.
         - output_feature_count: number of output features.
         - is_streamable: Indicates whether this neural network shall be used in streamable or stationary mode.
+        - name: the name of this neural network.
         """
     
         # Following the super class instructions for initialization
         # 0. Super
-        super(Dense, self).__init__(is_streamable=is_streamable)
+        super(Dense, self).__init__(is_streamable=is_streamable, name=name)
 
         # 1. Create a dictionary of stationary modules
         convertible_modules = { 'linear_1': torch.nn.Linear(input_feature_count, output_feature_count),
@@ -112,18 +116,19 @@ class Dense(NeuralNetwork):
 class Convolutional(NeuralNetwork):
     """This class is a convolutional neural network."""
 
-    def __init__(self, input_feature_count: int, output_feature_count: int, is_streamable: bool = False) -> object:
+    def __init__(self, input_feature_count: int, output_feature_count: int, is_streamable: bool = False, name: str = "Convolutional") -> object:
         """Constructor for this class.
         
         Inputs:
         - input_feature_count: number of input features.
         - output_feature_count: number of output features.
-        - is_streamable: Indicates whether this neural network shall be used in streamable or stationary mode.
+        - is_streamable: indicates whether this neural network shall be used in streamable or stationary mode.
+        - name: the name of this neural network
         """
     
         # Following the super class instructions for initialization
         # 0. Super
-        super(Convolutional, self).__init__(is_streamable=is_streamable)
+        super(Convolutional, self).__init__(is_streamable=is_streamable, name=name)
 
         # 1. Create a dictionary of stationary modules
         convertible_modules = {
@@ -139,14 +144,14 @@ class Convolutional(NeuralNetwork):
         
         # 3. Save the convertible modules for later computations 
         self.sequential = torch.nn.Sequential(
-            Convolutional.Transpose(),
+            Transpose(),
             convertible_modules['pad_1'],
             convertible_modules['convolutional_1'], torch.nn.ReLU(),
             convertible_modules['pad_2'],
             convertible_modules['convolutional_2'], torch.nn.ReLU(),
             convertible_modules['pad_3'],
             convertible_modules['convolutional_3'],
-            Convolutional.Transpose()
+            Transpose()
         )
   
     def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
@@ -156,27 +161,74 @@ class Convolutional(NeuralNetwork):
         # Outputs
         return y_hat
 
-    class Transpose(torch.nn.Module):
-        """Transposes inputs with along the final two dimensions"""
-        
-        def forward(self, x):
+class Transpose(torch.nn.Module):
+    """Transposes inputs with along the final two dimensions"""
+    
+    def forward(self, x):
 
-            return x.permute(dims=list(range(len(x.size())-2)) + [-1,-2])
+        return x.permute(dims=list(range(len(x.size())-2)) + [-1,-2])
+
+class MemoryDense(NeuralNetwork):
+    """This class is a dense neural network that is suited for time series.
+    It keeps a memory of past time frames and for each prediction uses dense connections from the entire memory to the output."""
+
+    def __init__(self, input_feature_count: int, output_feature_count: int, step_size: int, step_count: int, layer_count: int, is_streamable: bool = False, name = "MemoryDense") -> object:
+        """Constructor for this class.
+        
+        Inputs:
+        - input_feature_count: number of input features.
+        - output_feature_count: number of output features.
+        - step_size: the number of steps until the previous time frame is considered. E.g. if set to 1 then the previous time frame is considered. If set to 2 then one time frame will be skipped.
+        - step_count: the number of previous time frames with step size step_size that should influence the predition. If set to 1 only the current time frame is used. If set to 2 then also the previous time frame is used.
+        - layer_count: integer at least 1. The number of layers.
+        - is_streamable: indicates whether this neural network shall be used in streamable or stationary mode.
+        - name: the name of this neural network.
+        """
+    
+        # Following the super class instructions for initialization
+        # 0. Super
+        super(MemoryDense, self).__init__(is_streamable=is_streamable, name=name)
+
+        # 1. Create a dictionary of stationary modules. The memory effect is created by a convolution 
+        convertible_modules = { 
+            'pad_1': torch.nn.ConstantPad1d(padding=[(step_count-1)*step_size,0], value=0),
+            'conv_1': torch.nn.Conv1d(in_channels=input_feature_count, out_channels=output_feature_count, kernel_size=step_count, dilation=step_size),
+            }
+        for i in range(1,layer_count):
+            convertible_modules[f"linear_{i+1}"] = torch.nn.Linear(output_feature_count, output_feature_count)
+
+        # 2. Convert them to streamable modules
+        if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
+        
+        # 3. Save the convertible modules for later computations     
+        extra_layers = []
+        for i in range(1,layer_count):
+            extra_layers.append(torch.nn.ReLU())
+            extra_layers.append(convertible_modules[f"linear_{i+1}"])
+        self.sequential = torch.nn.Sequential(Transpose(), convertible_modules['pad_1'], convertible_modules['conv_1'], Transpose(), *extra_layers)
+  
+    def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
+        # Predict
+        y_hat = self.sequential(x)
+
+        # Outputs
+        return y_hat
 
 class ResStack(NeuralNetwork):
     """This class implements a residual stack."""
 
-    def __init__(self, is_streamable: bool, feature_count: int, dilation=1):
+    def __init__(self, is_streamable: bool, feature_count: int, dilation: int =1, name: str = "ResStack"):
         """Constructor for this class.
         
         Inputs:
-        - is_streamable: Indicates whether this neural network shall be used in streamable or stationary mode.
-        - feature_count: The number of features per time frame for input and output.
-        - dilation: The dilation for convolution operations.
+        - is_streamable: indicates whether this neural network shall be used in streamable or stationary mode.
+        - feature_count: the number of features per time frame for input and output.
+        - dilation: the dilation for convolution operations.
+        - name: the name of this neural network.
         """
         
         # 0. Super
-        super(ResStack, self).__init__(is_streamable=is_streamable)
+        super(ResStack, self).__init__(is_streamable=is_streamable, name=name)
 
         # 1. Create a dictionary of stationary modules
         convertible_modules = {
@@ -216,7 +268,7 @@ class VocGan(NeuralNetwork):
             "Seconds Per Spectrogram Hop": WAVE_FRAMES_PER_HOP / WAVE_SAMPLING_RATE,
     }
 
-    def __init__(self, is_streamable: bool, input_feature_count: int, output_feature_count: int, residual_layer_count: int, ratios: List[int] = [4, 4, 2, 2, 2, 2], multiplier: int = 256) -> object:
+    def __init__(self, is_streamable: bool, input_feature_count: int, output_feature_count: int, residual_layer_count: int, ratios: List[int] = [4, 4, 2, 2, 2, 2], multiplier: int = 256, name:str = "VocGan") -> object:
         """Constructor for this class.
         
         Inputs:
@@ -226,10 +278,11 @@ class VocGan(NeuralNetwork):
         - residual_layer_count: The number of residual layers to be used in each residual stack. A residual layer allows some of the data to skip a few processing steps.
         - ratios: The input output ratios for the upsample layers.
         - multiplier: The number of timeframes of waveform obtained from one time frame of spectrogram. 
+        - name: The name of this neural network.
         """
 
         # 0. Super
-        super(VocGan, self).__init__(is_streamable=is_streamable)
+        super(VocGan, self).__init__(is_streamable=is_streamable, name=name)
 
         # 1. Create a dictionary of stationary modules
         convertible_modules = {
@@ -660,5 +713,5 @@ class VocGan(NeuralNetwork):
         waveform = (amplitude*(waveform/np.max(np.abs(waveform)))).astype(np.int16)
         
         # Save
-        scipy.io.wavfile.write(filename=file_path, rate=VocGan.WAVE_SAMPLING_RATE, data=waveform)
+        wavfile.write(filename=file_path, rate=VocGan.WAVE_SAMPLING_RATE, data=waveform)
     
