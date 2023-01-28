@@ -15,7 +15,7 @@ class Fitter(Node):
     It expects a single input stream of a tuple that contains time courses for eeg features, speech spectrogram and label. 
     It has one output stream which is a data frame with columns for mean train and validation loss."""
 
-    def __init__(self, name: str, min_time_frames_in_buffer: int, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str) -> object:
+    def __init__(self, name: str, min_time_frames_in_buffer: int, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str, skip: bool) -> object:
         """Constructor for this class.
         
         Inputs:
@@ -25,6 +25,7 @@ class Fitter(Node):
         - eeg_stream_name, speech_stream_name, label_stream_name: The names of the streams. Each such name is used to identify a stream from the input ports.
         - neural_network_type: The type of the neural network to be trained, e.g. Dense or Convolutional. This type will be taken from models.neural_networks.
         - parameters_path: The path to the file where the neural network parameters shall be stored after each fit operation. This path is relative to the parameters directory.
+        - skip_fitting: Indicates whether the fitting shall be skipped. If True then no output is given in update().
         """
 
         # Super
@@ -36,20 +37,22 @@ class Fitter(Node):
         self.eeg_stream_name = eeg_stream_name
         self.speech_stream_name = speech_stream_name
         self.label_stream_name = label_stream_name
+        self.__skip__ = skip
         
         # Set the buffer
         self.__reset_buffer__()
 
-        # Set up parallel process
-        self.__pipe_end_point__, other_end_point = Pipe()
-        self.__parallel_process__ = Process(target=self.parallel_fitter, args=([other_end_point, neural_network_type, parameters_path]))
-        self.__parallel_process__.daemon = True # Ensures that the parallel process is killed when the main process is killed.
-        self.__parallel_process__.start()
-        self.__parallel_process_is_busy__ = False # The other process is only considered busy when it is currently processing data
+        if not skip:
+            # Set up parallel process
+            self.__pipe_end_point__, other_end_point = Pipe()
+            self.__parallel_process__ = Process(target=self.parallel_fitter, args=([other_end_point, neural_network_type, parameters_path]))
+            self.__parallel_process__.daemon = True # Ensures that the parallel process is killed when the main process is killed.
+            self.__parallel_process__.start()
+            self.__parallel_process_is_busy__ = False # The other process is only considered busy when it is currently processing data
 
-        # Initialize output
-        self.__mean_train_loss__ = 0
-        self.__mean_validation_loss__ = 0
+            # Initialize output
+            self.__mean_train_loss__ = 0
+            self.__mean_validation_loss__ = 0
 
     def update(self) -> None:
         """Maintains a buffer of EEG, spectrogram and labels and submits it regularly to a models.fitter.Fitter object. 
@@ -60,16 +63,20 @@ class Fitter(Node):
         incoming data. As soon as the buffer surpasses self.min_time_frames_in_buffer the fitter node will take
         the next opportunity to send it to the models.fitter.Fitter and the cycle continues."""
         
-        # Exit if not yet ready
-        if not self.i.ready(): return super().update()
+        # Set meta
+        self.o.meta = {'stream_name': 'losses'}
+
+        # Exit early
+        if self.__skip__ or not self.i.ready(): 
+            self.o.data = pd.DataFrame({'train': [0], 'validation': [0]})
+            return
+            
 
         # Take out x, y, labels
         eeg_slice = torch.Tensor(self.i.data[self.eeg_stream_name].values)
         speech_slice = torch.Tensor(self.i.data[self.speech_stream_name].values)
-        try:
-            label_slice = self.i.data[self.label_stream_name].iloc[:,0].values.tolist()
-        except:
-            ppp=3
+        label_slice = self.i.data[self.label_stream_name].iloc[:,0].values.tolist()
+        
         # Extend the buffer by the input
         if len(label_slice) > 0: 
             self.__extend_buffer__(eeg_slice=eeg_slice, speech_slice=speech_slice, label_slice=label_slice)
@@ -99,8 +106,7 @@ class Fitter(Node):
         # Set output
         time_points_in_slice = eeg_slice.size()[0]
         self.o.data = pd.DataFrame({'train': time_points_in_slice*[self.__mean_train_loss__], 'validation': time_points_in_slice*[self.__mean_validation_loss__]})
-        self.o.meta = {'stream_name': 'losses'}
-
+        
     def __reset_buffer__(self) -> None:
         """Mutating function that resets the buffer to empty deques.
         
@@ -211,116 +217,17 @@ class Fitter(Node):
             torch.save(stationary_neural_network.state_dict(), os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters', parameters_path + '.pt')))
 
             # Plot train performance
-            Fitter.plot_x_target_and_output(x=eeg[:1024,:], target=speech[:1024,:], output=stationary_neural_network.predict(x=eeg[:1024,:]), labels=labels[:1024], pause_string='', path=os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters')), model_name=str(neural_network_type).split('.')[-1][:-2])
+            #Fitter.plot_x_target_and_output(x=eeg[:1024,:], target=speech[:1024,:], output=stationary_neural_network.predict(x=eeg[:1024,:]), labels=labels[:1024], pause_string='', path=os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parameters')), model_name=str(neural_network_type).split('.')[-1][:-2])
 
             # Send the result
             pipe_end_point.send([train_losses, validation_losses])
             
     def terminate(self) -> None:
         # Wait for final fit
-        if self.__parallel_process_is_busy__:
+        if not self.__skip__ and self.__parallel_process_is_busy__:
             # Open its message and notify user
             train_losses, validation_losses = self.__pipe_end_point__.recv() # We expect just a single message from the parallel process, containing the loss of training and validation
             self.logger.info(f"Train loss: {torch.mean(train_losses)}, Validation loss: {torch.mean(validation_losses)}")
 
         self.__pipe_end_point__.close() # Close the connection to the parallel process
         return super().terminate()
-
-    @staticmethod
-    def plot_x_target_and_output(x: torch.Tensor, target: torch.Tensor, output: torch.Tensor, labels: List[str], pause_string: str, path: str, model_name: str) -> None:
-        """Plots x, the target and output.
-        Inputs:
-        - x: Input EEG time series. Shape == [time frame count, eeg channel count].
-        - target: Desired spectrogram. Shape == [time frame count, mel channel count].
-        - output: Obtained spectrogram. Shape == [time frame count, mel channel count].
-        - labels: The labels that indicate for each time frame of x, target and output which label was present at that time. Length == time frame count.
-        - pause_string: The string used to indicate pauses.
-        - path: Path to the folder where the figure should be stored.
-        - model_name: The name of the model used for the figure title.
-
-        Assumptions:
-        - x, target, output, labels are expected to have the same time frame count.
-        - target, output are expected to have the same shape.
-
-        Outputs:
-        - None
-        """
-        # Input validity
-        assert type(x) == torch.Tensor, f"Expected x to have type torch.Tensor, received {type(x)}."
-        assert type(target) == torch.Tensor, f"Expected target to have type torch.Tensor, received {type(target)}."
-        assert type(output) == torch.Tensor, f"Expected target to have type torch.Tensor, received {type(target)}."
-        assert type(labels) == type(['']), f"Expected labels to have type {type([''])}, received {type(labels)}."
-        assert x.size()[0] == output.size()[0] and output.size()[0] == target.size()[0] and target.size()[0] == len(labels), f"Expected x, target, output and labels to have the same time frame count. Received for x {x.size()[0]}, target {target.size()[0]}, output {output.size()[0]}, labels {len(labels)}."
-
-        # Figure
-        fig=plt.figure()
-        plt.suptitle("Sample of Data Passed Through " + model_name)
-
-        # Labels
-        tick_locations = [0]
-        tick_labels = [labels[0]]
-        for l in range(1,len(labels)):
-            if labels[l] != labels[l-1] and labels[l] != pause_string: 
-                tick_locations.append(l)
-                tick_labels.append(labels[l]) 
-
-        # EEG
-        plt.subplot(3,1,1); plt.title("EEG Input")
-        plt.imshow(x.permute((1,0)).detach().numpy()); plt.ylabel("EEG Channel")
-        plt.xticks(ticks=tick_locations, labels=['' for label in tick_labels])
-
-        # Target spectrogram
-        plt.subplot(3,1,2); plt.title("Target Speech Spectrogram")
-        plt.imshow(np.flipud(target.permute((1,0)).detach().numpy()))
-        plt.xticks(ticks=tick_locations, labels=['' for label in tick_labels])
-        plt.ylabel("Mel Channel")
-        
-        # Output spectrogram
-        plt.subplot(3,1,3); plt.title("Output Spech Spectrogram")
-        plt.imshow(np.flipud(output.permute((1,0)).detach().numpy()))
-        plt.xlabel("Time Frames")
-        plt.ylabel("Mel Channel")
-        plt.xticks(ticks=tick_locations, labels=tick_labels)
-
-        # Saving
-        if not os.path.exists(path): os.makedirs(path)
-        plt.savefig(os.path.join(path, "Sample Data.png"), dpi=600)
-        plt.close(fig)
-   
-    def plot_loss_trajectory(self, train_losses: List[float], validation_losses: List[float], path: str, 
-                          loss_name: str, logarithmic: bool = True) -> None:
-        """Plots the losses of train and validation time courses per epoch on a logarithmic scale.
-        
-        Assumptions:
-        - train and validation losses are assumed to have the same number of elements and that their indices are synchronized.
-
-        Inputs:
-        - train_losses: The losses of the model during training.
-        - validation_losses: The losses of the model during validation.
-        - path: Path to the folder where the figure should be stored.
-        - loss_name: Name of the loss function.
-        - logarithmic: Inidcates whether the plot should use a logarithmic y-axis.
-        
-        Outputs:
-        - None"""
-    
-        # Figure
-        fig=plt.figure()
-        
-        # Transform
-        if logarithmic:
-            train_losses = np.log(train_losses)
-            validation_losses = np.log(validation_losses)
-            plt.yscale('log')
-
-        # Plot
-        plt.plot(train_losses)
-        plt.plot(validation_losses)
-        plt.legend(["Train","Validation"])
-        plt.title("Learning curve for " + self.model_name)
-        plt.xlabel("Epoch"); plt.ylabel(loss_name)
-    
-        # Save
-        if not os.path.exists(path): os.makedirs(path)
-        plt.savefig(os.path.join(path, "Learning Curve.png"), dpi=600)
-        plt.close(fig=fig)

@@ -5,13 +5,13 @@ from matplotlib.figure import Figure
 from abc import ABC
 import numpy as np
 import pandas as pd
-import time
+import time, torch
 from typing import Tuple, List
 
 class Monitor(Node, ABC):
     """This is an abstract base class that provides monitoring capability for timeflux nodes. It Every data 
     frame passed to the monitor is expected to have time points along the initial axis.
-    These nodes expect a certain number of input streams (see child class description).
+    These nodes expect a certain number of input streams (see child class description) of type numpy.ndarray or pandas.DataFrame.
     They do not have output streams."""
 
     def __init__(self, name: str, time_frames_in_buffer: int, title: str, y_label: str, y_lim: Tuple[float, float] = None, width: int=7, height: int=4, is_visible: bool = True) -> object:

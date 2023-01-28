@@ -7,9 +7,9 @@ from models import neural_networks
 class Predictor(Node):
     """This node predicts the speech spectrogram based on eeg.
     It expects as input streams of the aligned eeg feature time course, the label time course and the fitter loss. 
-    It has one output stream for the speech spectrogram."""
+    It has one output stream for the speech spectrogram of type pandas.DataFrame."""
 
-    def __init__(self, name: str, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str) -> object:
+    def __init__(self, name: str, eeg_stream_name: str, speech_stream_name: str, label_stream_name: str, neural_network_type: str, parameters_path: str, skip: bool) -> object:
         """Constructor for this class.
         
         Inputs:
@@ -17,7 +17,8 @@ class Predictor(Node):
         - eeg_stream_name, speech_stream_name, label_stream_name: The names of the streams. Each such name is used to identify a stream from the input ports.
         - neural_network_type: The type of the neural network to be trained, e.g. Dense or Convolutional. This type will be taken from models.neural_networks.
         - parameters_path: The path to the file where the neural network parameters shall be stored after each fit operation. This path is relative to the parameters directory.
-       
+        - skip: Indicates whether to skip the neural network during update(). If True then the spectrogram input is simply output. If False then the model predicts the spectrogram and uses the prediction as the output.
+
         Outputs:
         - self: The initialized instance."""
         
@@ -31,6 +32,7 @@ class Predictor(Node):
         self.__label_stream_name__ = label_stream_name
         self.__neural_network_type__ = neural_network_type
         self.parameters_path = parameters_path
+        self.skip = skip
 
         # Set variable for neural network
         self.streamable_neural_network = None
@@ -42,6 +44,9 @@ class Predictor(Node):
         self.__previous_loss__ = None
 
     def update(self):
+        # Set meta
+        self.o.meta = {'stream_name':'speech spectrogram'}
+
         # Clear buffer
         for key in self.__buffer__.keys(): self.__buffer__[key] = None
 
@@ -63,6 +68,11 @@ class Predictor(Node):
         eeg = torch.Tensor(self.__buffer__[self.__eeg_stream_name__].values)
         speech = self.__buffer__[self.__speech_stream_name__] # We only convert speech to torch if the neural network is not used
         labels = self.__buffer__[self.__label_stream_name__]
+
+        # Early exit
+        if self.skip:
+            self.o.data = speech
+            return
 
         # Check whether the loss changed between previous and current slice
         loss_changed = self.__did_loss_change__(losses=self.__buffer__['losses']['validation'])

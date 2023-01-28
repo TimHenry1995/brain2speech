@@ -37,6 +37,7 @@ graphs:
         label_stream_name: {{LABEL_STREAM_NAME}}
         neural_network_type: {{NEURAL_NETWORK_TYPE}}
         parameters_path: {{PARAMETERS_PATH}}
+        skip: {{NEURAL_NETWORK_SKIP_FITTER}}
 
     - id: predictor
       module: nodes.predictor
@@ -48,18 +49,25 @@ graphs:
         label_stream_name: {{LABEL_STREAM_NAME}}
         neural_network_type: {{NEURAL_NETWORK_TYPE}}
         parameters_path: {{PARAMETERS_PATH}}
+        skip: {{NEURAL_NETWORK_SKIP_PREDICTOR}}
+
+    - id: vocgan
+      module: nodes.vocgan
+      class: VocGan
+      params:
+        name: vocgan
 
     # Monitoring
-    - id: speech_monitor
+    - id: spectrogram
       module: nodes.monitor
       class: Imshow
       params:
-        name: speech_monitor
+        name: spectrogram
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
         title: "Speech"
         y_label: "Mel Bins"
         height: 2
-        is_visible: {{MONITOR_VISIBLE}}
+        is_visible: {{MONITOR_SPECTROGRAM_VISIBLE}}
     
     - id: eeg_monitor
       module: nodes.monitor
@@ -70,7 +78,7 @@ graphs:
         title: "EEG"
         y_label: "Features"
         height: 2.5
-        is_visible: {{MONITOR_VISIBLE}}
+        is_visible: {{MONITOR_EEG_VISIBLE}}
 
     - id: label_monitor
       module: nodes.monitor
@@ -81,7 +89,7 @@ graphs:
         title: "Words"
         y_label: ""
         height: 2
-        is_visible: {{MONITOR_VISIBLE}}
+        is_visible: {{MONITOR_LABEL_VISIBLE}}
 
     - id: loss_monitor
       module: nodes.monitor
@@ -92,8 +100,20 @@ graphs:
         title: "Loss"
         y_label: "Mean Squared Error"
         y_lim: [0, 50]
-        height: 4
-        is_visible: {{MONITOR_VISIBLE}}
+        height: 3
+        is_visible: {{MONITOR_LOSS_VISIBLE}}
+
+    - id: waveform_monitor
+      module: nodes.monitor
+      class: Plot
+      params:
+        name: waveform_monitor
+        time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER_WAVEFORM}}
+        title: "Speech Waveform"
+        y_label: "Amplitude"
+        y_lim: [-1.5, 1.5]
+        height: 3
+        is_visible: {{MONITOR_WAVEFORM_VISIBLE}}
 
     edges:
       # Data Processing
@@ -113,15 +133,19 @@ graphs:
         target: predictor:{{SPEECH_STREAM_NAME}}
       - source: fitter
         target: predictor:losses
+      - source: predictor
+        target: vocgan
 
       # Monitoring
       - source: predictor
-        target: speech_monitor
+        target: spectrogram
       - source: sub:{{EEG_STREAM_NAME}}
         target: eeg_monitor
       - source: sub:{{LABEL_STREAM_NAME}}
         target: label_monitor
       - source: fitter
         target: loss_monitor
+      - source: vocgan
+        target: waveform_monitor
     
     rate: {{MAIN_RATE}}
