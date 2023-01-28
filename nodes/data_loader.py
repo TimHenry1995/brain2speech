@@ -13,7 +13,7 @@ class DataLoader(Node):
         
         Inputs:
         - name: The name assigned to this node.
-        - data_folder_path: The path to the folder where the data is stored.
+        - data_folder_path: The path to the folder where the data is stored relative to the folder called 'data' in the root directory.
         - subject_identifier: The identifier of the subejct, e.g. sub-01.
         - stream_name: The name of the stream, e.g. feat, procWords or spec.
         - seconds_per_time_frame: The number of seconds per time frame. Determines the number of time frames per slice.
@@ -28,7 +28,7 @@ class DataLoader(Node):
         # Copy fields
         self.name = name
         self.seconds_per_time_frame = seconds_per_time_frame
-        self.__file_path__ = os.path.join(data_folder_path, f"{subject_identifier}_{stream_name}.npy")
+        self.__file_path__ = os.path.join('data', data_folder_path, f"{subject_identifier}_{stream_name}.npy")
         self.__stream_name__ = stream_name
 
         # Load data

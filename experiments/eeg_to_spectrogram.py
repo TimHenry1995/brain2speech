@@ -25,8 +25,8 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 if __name__=="__main__":
-    spec2wav = svg.StreamingVocGan(is_streaming=False)
-    feat_path = r'/Users/timdick/Documents/Master_Internship_old/SingleWordProductionDutch/SingleWordProductionDutch-iBIDS/features'
+    root_path = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
+    data_path = r'/Users/timdick/Documents/Master_Internship_old/SingleWordProductionDutch/SingleWordProductionDutch-iBIDS/features'
     result_path = r'SingleWordProductionDutch/SingleWordProductionDutch-iBIDS/results'
     pts = ['sub-%02d'%i for i in range(1,11)]
 

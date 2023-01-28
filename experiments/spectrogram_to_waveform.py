@@ -9,12 +9,13 @@ if __name__ == "__main__":
     # File configuration
     root_path = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
     file_name = 'Dutch example.wav'
-    input_path = os.path.join(root_path, 'data', 'original_audio_files/',file_name)
-    output_path_stationary = os.path.join(root_path, 'data', 'generated_audio_files/stationary',file_name)
-    output_path_streamable = os.path.join(root_path, 'data', 'generated_audio_files/streamable',file_name)
+    data_path = os.path.join(root_path, 'data', 'spectrogram_to_waveform',file_name)
+    results_path = os.path.join(root_path, 'results', 'spectrogram_to_waveform')
+    results_path_stationary = os.path.join(results_path, 'stationary', file_name)
+    results_path_streamable = os.path.join(results_path, 'streamable', file_name)
 
     # Load waveform
-    samplerate, waveform = wavfile.read(input_path)
+    samplerate, waveform = wavfile.read(data_path)
     print(f"The audio is {waveform.shape[-1]/samplerate} seconds long.")
 
     # Convert to spectrogram
@@ -30,7 +31,7 @@ if __name__ == "__main__":
     print(f"Converting the spectrogram to waveform took {stationary_processing_time} seconds in stationary mode.")
 
     # Save
-    mnn.VocGan.save(waveform=waveform_stationary, file_path=output_path_stationary)
+    mnn.VocGan.save(waveform=waveform_stationary, file_path=results_path_stationary)
 
     # streamable Demo
     # Load model
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     
     # Save
     waveform_streamable = torch.cat(waveform_streamable_slices, axis=-1)
-    mnn.VocGan.save(waveform=waveform_streamable, file_path=output_path_streamable)
+    mnn.VocGan.save(waveform=waveform_streamable, file_path=results_path_streamable)
 
     # Plot
     mnn.VocGan.plot(mel_spectrogram=mel_spectrogram, waveform_stationary=waveform_stationary, waveform_streamable_slices=waveform_streamable_slices, slice_processing_times=slice_processing_times)
