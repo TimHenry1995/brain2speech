@@ -87,7 +87,7 @@ graphs:
         name: label_monitor
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
         title: "Words"
-        y_label: ""
+        y_label: "Word"
         height: 2
         is_visible: {{MONITOR_LABEL_VISIBLE}}
 
@@ -99,8 +99,8 @@ graphs:
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
         title: "Loss"
         y_label: "Mean Squared Error"
-        y_lim: [0, 50]
-        height: 3
+        y_lim: [0, 60]
+        height: 2.5
         is_visible: {{MONITOR_LOSS_VISIBLE}}
 
     - id: waveform_monitor
@@ -112,7 +112,7 @@ graphs:
         title: "Speech Waveform"
         y_label: "Amplitude"
         y_lim: [-1.5, 1.5]
-        height: 3
+        height: 2.5
         is_visible: {{MONITOR_WAVEFORM_VISIBLE}}
 
     edges:

@@ -46,14 +46,15 @@ class Monitor(Node, ABC):
             self.__window__.protocol("WM_DELETE_WINDOW", self.__close_window__)
 
             # Create an empty figure
-            figure = Figure(figsize=(width, height), dpi=100)
-            self.__ax__ = figure.add_subplot()
+            self.__figure__ = Figure(figsize=(width, height), dpi=100)
+            self.__figure__.tight_layout()
+            self.__ax__ = self.__figure__.add_subplot()
             self.__ax__.set_title(title)
             self.__ax__.set_xlabel("Time Frames")
             self.__ax__.set_ylabel(y_label)
             
             # Draw figure in canvas
-            self.__canvas__ = FigureCanvasTkAgg(figure, master=self.__window__)  # A tk.DrawingArea.
+            self.__canvas__ = FigureCanvasTkAgg(self.__figure__, master=self.__window__)  # A tk.DrawingArea.
             self.__canvas__.draw()
             self.__canvas__.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
 
@@ -93,7 +94,7 @@ class Monitor(Node, ABC):
 
             # Plot the new data
             self.__draw_buffer__()
-
+            self.__figure__.tight_layout()
             # Update canvas
             if hasattr(self, "__canvas__"): self.__canvas__.draw()
             self.__window__.update()
@@ -140,10 +141,9 @@ class Text(Monitor):
 
         for t, time_frame in enumerate(self.__buffer__.iloc[1:,0].values.tolist()):
             if time_frame != self.__buffer__.iloc[t,0]:
-                self.__ax__.text(t-self.time_frames_in_buffer,0.5,time_frame)
+                self.__ax__.text(t-self.time_frames_in_buffer,0.1,time_frame, rotation=90)
 
         self.__ax__.set_xlim(left=-self.time_frames_in_buffer, right=0)
-        self.__ax__.set_yticks([])
 
 if __name__ == "__main__":
 
