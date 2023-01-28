@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# vocgan model parameters
+vctk_pretrained_model_3180.pt
+
 # C extensions
 *.so
 
