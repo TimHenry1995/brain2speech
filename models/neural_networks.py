@@ -239,28 +239,20 @@ class VocGan(NeuralNetwork):
             'conv_transpose1d_1': torch.nn.ConvTranspose1d(multiplier * 2, multiplier, kernel_size=ratios[0] * 2, stride=ratios[0], padding=ratios[0] // 2 + ratios[0] % 2, output_padding=ratios[0] % 2),
             # Upsample 2
             'conv_transpose1d_2': torch.nn.ConvTranspose1d((multiplier//2) * 2, multiplier//2, kernel_size=ratios[1] * 2, stride=ratios[1], padding=ratios[1] // 2 + ratios[1] % 2, output_padding=ratios[1] % 2),
-            'reflection_pad_2': torch.nn.ReflectionPad1d(3),
-            'conv1d_2': torch.nn.Conv1d(multiplier//2, output_feature_count, kernel_size=7, stride=1),
             # Upsample 3
             'conv_transpose1d_3': torch.nn.ConvTranspose1d(((multiplier//2)//2) * 2, ((multiplier//2)//2), kernel_size=ratios[2] * 2, stride=ratios[2], padding=ratios[2] // 2 + ratios[2] % 2, output_padding=ratios[2] % 2),
             'conv_transpose1d_4': torch.nn.ConvTranspose1d(input_feature_count, ((multiplier//2)//2), kernel_size=64, stride=32, padding=16, output_padding=0),
-            'reflection_pad_3': torch.nn.ReflectionPad1d(3),
-            'conv1d_3': torch.nn.Conv1d(((multiplier//2)//2), output_feature_count, kernel_size=7, stride=1),
             # Upsample 4
             'conv_transpose1d_5': torch.nn.ConvTranspose1d((((multiplier//2)//2)//2) * 2, (((multiplier//2)//2)//2), kernel_size=ratios[3] * 2, stride=ratios[3], padding=ratios[3] // 2 + ratios[3] % 2, output_padding=ratios[3] % 2),
             'conv_transpose1d_6': torch.nn.ConvTranspose1d(input_feature_count, (((multiplier//2)//2)//2), kernel_size=128, stride=64, padding=32, output_padding=0),
-            'reflection_pad_4': torch.nn.ReflectionPad1d(3),
-            'conv1d_4': torch.nn.Conv1d((((multiplier//2)//2)//2), output_feature_count, kernel_size=7, stride=1),
             # Upsample 5
             'conv_transpose1d_7': torch.nn.ConvTranspose1d(((((multiplier//2)//2)//2)//2) * 2, ((((multiplier//2)//2)//2)//2), kernel_size=ratios[4] * 2, stride=ratios[4], padding=ratios[4] // 2 + ratios[4] % 2, output_padding=ratios[4] % 2),
             'conv_transpose1d_8': torch.nn.ConvTranspose1d(input_feature_count, ((((multiplier//2)//2)//2)//2), kernel_size=256, stride=128, padding=64, output_padding=0),
-            'reflection_pad_5': torch.nn.ReflectionPad1d(3),
-            'conv1d_5': torch.nn.Conv1d(((((multiplier//2)//2)//2)//2), output_feature_count, kernel_size=7, stride=1),
             # Upsample 6
             'conv_transpose1d_9': torch.nn.ConvTranspose1d((((((multiplier//2)//2)//2)//2)//2) * 2, (((((multiplier//2)//2)//2)//2)//2), kernel_size=ratios[5] * 2, stride=ratios[5], padding=ratios[5] // 2 + ratios[5] % 2, output_padding=ratios[5] % 2),
             'conv_transpose1d_10': torch.nn.ConvTranspose1d(input_feature_count, (((((multiplier//2)//2)//2)//2)//2), kernel_size=512, stride=256, padding=128, output_padding=0),
-            'reflection_pad_6': torch.nn.ReflectionPad1d(3),
-            'conv1d_6': torch.nn.Conv1d((((((multiplier//2)//2)//2)//2)//2), output_feature_count, kernel_size=7, stride=1),
+            'reflection_pad_2': torch.nn.ReflectionPad1d(3),
+            'conv1d_2': torch.nn.Conv1d((((((multiplier//2)//2)//2)//2)//2), output_feature_count, kernel_size=7, stride=1),
             # Sum
             'sum_1': stationary.Sum(),
             'sum_2': stationary.Sum(),
@@ -336,8 +328,8 @@ class VocGan(NeuralNetwork):
         # Output layer
         self.out = torch.nn.Sequential(
             torch.nn.LeakyReLU(0.2),
-            convertible_modules['reflection_pad_6'],
-            torch.nn.utils.weight_norm(convertible_modules['conv1d_6']),
+            convertible_modules['reflection_pad_2'],
+            torch.nn.utils.weight_norm(convertible_modules['conv1d_2']),
             torch.nn.Tanh(),
         )
 
@@ -409,9 +401,20 @@ class VocGan(NeuralNetwork):
         neural_network = VocGan(is_streamable=is_streamable, input_feature_count=hp.audio.n_mel_channels, output_feature_count=hp.model.out_channels, 
             residual_layer_count=hp.model.n_residual_layers, ratios=hp.model.generator_ratio, multiplier=hp.model.mult)
         neural_network.load_state_dict(checkpoint['model_g'])
-        
+        neural_network.remove_weight_norm()
         # Outputs
         return neural_network
+
+    def remove_weight_norm(self):
+        """Remove weight normalization module from all of the layers."""
+
+        def _remove_weight_norm(m):
+            try:
+                torch.nn.utils.remove_weight_norm(m)
+            except ValueError:  # this module didn't have weight norm
+                return
+
+        self.apply(_remove_weight_norm)
 
     @staticmethod
     def waveform_to_mel_spectrogram(waveform: Union[torch.Tensor, np.array], original_sampling_rate: int, mel_feature_count: int = 80, min_frequency: float = 0.0, max_frequency: float = 8000.0) -> torch.Tensor:
