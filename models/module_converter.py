@@ -184,3 +184,38 @@ class LinearConverter(ModuleConverter):
 
         # Outputs
         return streamable_module
+
+class GRUConverter(ModuleConverter):
+    """This class provides a method to convert between stationary and streamable GRU."""
+
+    @staticmethod
+    def __convert__(module: object, target_type: Type) -> object:
+        # Create module equivalent
+        new_module = target_type(
+            kwargs={"input_size": module.input_size,
+            "hidden_size": module.hidden_size,
+            "num_layers": module.num_layers,
+            "bias": module.bias != None,
+            "batch_first": module.batch_first,
+            "dropout": module.dropout,
+            "bidirectional": module.bidirectional
+            }
+        )
+
+        # Transfer the parameters
+        for k in range(module.num_layers):
+            new_module.weight_ih_l[k] = module.weight_ih_l[k]
+            new_module.weight_hh_l[k] = module.weight_hh_l[k]
+            new_module.bias_ih_l[k] = module.bias_ih_l[k]
+            new_module.bias_hh_l[k] = module.bias_hh_l[k] 
+
+        # Outputs
+        return new_module
+
+    @staticmethod
+    def stationary_to_streamable(module: torch.nn.Module) -> streamable.Module:
+        # Create module equivalent
+        streamable_module = GRUConverter.__convert__(module=module, target_type=streamable.GRU)
+
+        # Outputs
+        return streamable_module

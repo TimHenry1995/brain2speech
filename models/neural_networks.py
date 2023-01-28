@@ -214,6 +214,42 @@ class MemoryDense(NeuralNetwork):
         # Outputs
         return y_hat
 
+class Recurrent(NeuralNetwork):
+    """This class implements a recurrent neural network"""
+
+    def __init__(self, input_feature_count: int, output_feature_count: int, is_streamable: bool = False, name: str = "Recurrent") -> object:
+        """Constructor for this class.
+        
+        Inputs:
+        - input_feature_count: number of input features.
+        - output_feature_count: number of output features.
+        - is_streamable: Indicates whether this neural network shall be used in streamable or stationary mode.
+        - name: the name of this neural network.
+        """
+    
+        # Following the super class instructions for initialization
+        # 0. Super
+        super(Recurrent, self).__init__(is_streamable=is_streamable, name=name)
+
+        # 1. Create a dictionary of stationary modules
+        convertible_modules = { 'gru': stationary.GRU(input_size=input_feature_count, hidden_size=output_feature_count, num_layers=1, batch_first=True),
+                                'linear': torch.nn.Linear(output_feature_count, output_feature_count)}
+        
+        # 2. Convert them to streamable modules
+        if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
+        
+        # 3. Save the convertible modules for later computations     
+        self.gru = convertible_modules['gru']
+        self.linear = convertible_modules['linear']
+
+    def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
+        # Predict
+        y_hat = self.gru(x)
+        y_hat = self.linear(y_hat)
+
+        # Outputs
+        return y_hat
+
 class ResStack(NeuralNetwork):
     """This class implements a residual stack."""
 

@@ -171,11 +171,11 @@ if __name__=="__main__":
             # Construct neural networks
             eeg_channel_count = data.shape[1]; mel_channel_count = spectrogram.shape[1]
             step_count = 8; step_size = 8
-            stationary_neural_network = mnn.MemoryDense(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, step_count=step_count, step_size=step_size, layer_count=2, name="L")
+            #stationary_neural_network = mnn.MemoryDense(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, step_count=step_count, step_size=step_size, layer_count=1, name="L")
             #stationary_neural_network = mnn.MemoryDense(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, step_count=step_count, step_size=step_size, layer_count=2, name="D")
-            #est = nns.ConvolutionalNeuralNetwork(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, shift_count=8, shift_step_size=8)
-            #est = nns.RecurrentNeuralNetwork(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count)
-            #est = nns.AttentionNeuralNetwork(query_feature_count=eeg_channel_count, hidden_feature_count=eeg_channel_count, x_key=train_data[:1024,:], x_value=train_spectrogram[:1024,:], labels=train_labels[:1024], pause_string='', shift_count=shift_count, shift_step_size=shift_step_size)
+            #stationary_neural_network = mnn.Convolutional(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, name='C')
+            stationary_neural_network = mnn.Recurrent(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, name="R")
+            #stationary_neural_network = nns.AttentionNeuralNetwork(query_feature_count=eeg_channel_count, hidden_feature_count=eeg_channel_count, x_key=train_data[:1024,:], x_value=train_spectrogram[:1024,:], labels=train_labels[:1024], pause_string='', shift_count=shift_count, shift_step_size=shift_step_size)
        
             # Train
             loss_function = torch.nn.MSELoss()
@@ -186,7 +186,7 @@ if __name__=="__main__":
             train_data, train_spectrogram = mut.reshape_by_label(x=train_data, labels=train_labels, pause_string='', y=train_spectrogram)
             train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=train_data, y=train_spectrogram, loss_function=loss_function, optimizer=optimizer, epoch_count=50)
             time.sleep(2) # To prevent CPU from overheating
-            prediction = stationary_neural_network.predict(x=test_data)
+            prediction = stationary_neural_network.predict(x=test_data.unsqueeze(0)).squeeze()
 
             # Plots
             model_name = stationary_neural_network.name

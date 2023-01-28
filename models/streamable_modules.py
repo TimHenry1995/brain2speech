@@ -105,10 +105,10 @@ class Module(ABC):
         - self.__state__ may have changed to be None, a tensor or a list of tensors.
 
         Inputs:
-        - input: input tensor of size [batch size, input channel count, time point count of original input slice].
+        - input: input tensor of size [batch size, input channel count, time point count of original input slice]. The last two axes might be swopped. For details see the corresponing pytorch module.
         
         Outputs:
-        - y_hat: output tensor of size [batch size, input channel count, combination of time point count of state and original input slice]."""
+        - y_hat: output tensor of size [batch size, input channel count, combination of time point count of state and original input slice]. The last two axes might be swopped. For details see the corresponing pytorch module."""
         
         # Set precision of operations
         self.__ensure_module_precision__()
@@ -906,6 +906,39 @@ class Linear(Module, torch.nn.Linear):
     def __forward_and_finish_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
         # Predict
         y_hat = torch.nn.Linear.forward(self=self, input=x)
+
+        # Outputs
+        return y_hat
+
+class GRU(Module, torch.nn.Module):
+    """Provides a trivial implementation for streaming support for a torch.nn.GRU module."""
+
+    def __init__(self, kwargs) -> object:
+        """Initializer for this class.
+        
+        Inputs:
+        - kwargs: The same arguments as for torch.nn.GRU."""
+        
+        torch.nn.GRU.__init__(self, **kwargs)
+        Module.__init__(self)
+
+    def __forward_and_initialize_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
+        # Predict
+        y_hat, self.__state__ = torch.nn.GRU.forward(self=self, input=x)
+
+        # Outputs
+        return y_hat
+    
+    def __forward_and_propagate_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
+        # Predict
+        y_hat, self.__state__ = torch.nn.GRU.forward(self=self, input=x, h_0=self.__state__)
+
+        # Outputs
+        return y_hat
+
+    def __forward_and_finish_state__(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
+        # Predict
+        y_hat, _ = torch.nn.GRU.forward(self=self, input=x, h_0=self.__state__)
 
         # Outputs
         return y_hat
