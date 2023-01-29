@@ -128,6 +128,13 @@ class Convolutional():
         input_feature_count=3
         output_feature_count=6
         convolutional = mnn.Convolutional(input_feature_count=input_feature_count, output_feature_count=output_feature_count, is_streamable=False)
+        # Set parameters since not all parameters converge equally well
+        torch.seed = 42
+        new_state_dict = {}
+        for (name, parameter) in convolutional.state_dict().items():
+            if not parameter is None:
+                new_state_dict[name] = 0.1*torch.rand_like(parameter)
+        convolutional.load_state_dict(new_state_dict)
         NeuralNetwork.test_A(stationary_neural_network=convolutional, type=mnn.Convolutional, instance_count=16, time_frame_count=64, 
             input_feature_count=input_feature_count, output_feature_count=output_feature_count)
 
@@ -147,6 +154,90 @@ class Convolutional():
         instance_count=16, time_frames_per_slice = 1, slice_count=64,  
             input_feature_count=kwargs['input_feature_count'], test_name='C')
 
+class Attention():
+    """This class provides units tests for the AttentionNeuralNetwork."""
+
+    @staticmethod
+    def test_A() -> None:
+        input_feature_count=3
+        output_feature_count=6
+
+        x_key = torch.cat([torch.rand(20,input_feature_count), torch.ones([10, input_feature_count])])
+        x_value = torch.cat([torch.rand(20,output_feature_count), torch.zeros([10, output_feature_count])])
+        labels = ['a'] * 10 + [''] * 10 + ['b'] * 5 + [''] * 5
+        attention = mnn.Attention(query_feature_count=input_feature_count, hidden_feature_count=input_feature_count, x_key=x_key, x_value=x_value, labels=labels, pause_string='', step_count = 2, step_size = 1, is_streamable= False)
+        NeuralNetwork.test_A(stationary_neural_network=attention, type=mnn.Attention, instance_count=16, time_frame_count=64, 
+            input_feature_count=input_feature_count, output_feature_count=output_feature_count)
+
+    @staticmethod
+    def test_B() -> None:
+        input_feature_count=3
+        output_feature_count=6
+        
+        x_key = torch.cat([torch.rand(20,input_feature_count), torch.ones([10, input_feature_count])])
+        x_value = torch.cat([torch.rand(20,output_feature_count), torch.zeros([10, output_feature_count])])
+        labels = ['a'] * 10 + [''] * 10 + ['b'] * 5 + [''] * 5
+        kwargs = {'query_feature_count':input_feature_count, 'hidden_feature_count':input_feature_count, 'x_key':x_key, 'x_value':x_value, 'labels':labels, 'pause_string':'', 'step_count': 2, 'step_size': 1}
+        
+        attention = mnn.Attention(**kwargs, is_streamable=False)
+        NeuralNetwork.test_B(stationary_neural_network=attention, type=mnn.Attention, kwargs=kwargs, 
+        instance_count=16, time_frames_per_slice = 8, slice_count=64,  
+            input_feature_count=input_feature_count)
+
+    @staticmethod
+    def test_C() -> None:
+        input_feature_count=3
+        output_feature_count=6
+        
+        x_key = torch.cat([torch.rand(20,input_feature_count), torch.ones([10, input_feature_count])])
+        x_value = torch.cat([torch.rand(20,output_feature_count), torch.zeros([10, output_feature_count])])
+        labels = ['a'] * 10 + [''] * 10 + ['b'] * 5 + [''] * 5
+        kwargs = {'query_feature_count':input_feature_count, 'hidden_feature_count':input_feature_count, 'x_key':x_key, 'x_value':x_value, 'labels':labels, 'pause_string':'', 'step_count': 2, 'step_size': 1}
+        
+        attention = mnn.Attention(**kwargs, is_streamable=False)
+        NeuralNetwork.test_B(stationary_neural_network=attention, type=mnn.Attention, kwargs=kwargs, 
+        instance_count=16, time_frames_per_slice = 1, slice_count=64,  
+            input_feature_count=input_feature_count, test_name='C')
+
+    @staticmethod
+    def test_stack_attention_A():
+        x = torch.arange(start=0, end=70, step=1).reshape((1,10,7))
+        y = torch.Tensor(
+            [[[[ 0.,  0.,  0.,  0.,  0.,  0.,  0.],[ 0.,  0.,  0.,  0.,  0.,  0.,  0.],[ 0.,  0.,  0.,  0.,  0.,  0.,  0.],[ 0.,  0.,  0.,  0.,  0.,  0.,  0.],[ 0.,  0.,  0.,  0.,  0.,  1.,  2.],[ 0.,  0.,  0.,  0.,  7.,  8.,  9.],[ 0.,  0.,  0.,  0., 14., 15., 16.],[ 0.,  0.,  0.,  0., 21., 22., 23.],[ 0.,  0.,  0.,  0., 28., 29., 30.],[ 0.,  0.,  0.,  0., 35., 36., 37.]],
+            [[ 0.,  0.,  0.,  0.,  0.,  0.,  0.],[ 0.,  0.,  0.,  0.,  0.,  0.,  0.],[ 0.,  0.,  0.,  1.,  2.,  3.,  4.],[ 0.,  0.,  7.,  8.,  9., 10., 11.],[ 0.,  0., 14., 15., 16., 17., 18.],[ 0.,  0., 21., 22., 23., 24., 25.],[ 0.,  0., 28., 29., 30., 31., 32.],[ 0.,  0., 35., 36., 37., 38., 39.],[ 0.,  0., 42., 43., 44., 45., 46.],[ 0.,  0., 49., 50., 51., 52., 53.]],
+            [[ 0.,  1.,  2.,  3.,  4.,  5.,  6.],[ 7.,  8.,  9., 10., 11., 12., 13.],[14., 15., 16., 17., 18., 19., 20.],[21., 22., 23., 24., 25., 26., 27.],[28., 29., 30., 31., 32., 33., 34.],[35., 36., 37., 38., 39., 40., 41.],[42., 43., 44., 45., 46., 47., 48.],[49., 50., 51., 52., 53., 54., 55.],[56., 57., 58., 59., 60., 61., 62.],[63., 64., 65., 66., 67., 68., 69.]]]]
+            )
+        y_hat = mnn.Attention.__stack_attention__(attention=x, step_count=3, step_size=2)
+        
+        if torch.equal(y, y_hat): print("\tPassed unit test A for Attention.__shift_x_value__().")
+        else: print("\tFailed unit test A for Attention.__shift_x_value__().")
+
+    @staticmethod
+    def test_stack_attention_B():
+        x = torch.arange(start=0, end=70, step=1).reshape((1,10,7))
+        y = torch.Tensor(
+            [[[[ 0.,  1.,  2.,  3.,  4.,  5.,  6.],[ 7.,  8.,  9., 10., 11., 12., 13.],[14., 15., 16., 17., 18., 19., 20.],[21., 22., 23., 24., 25., 26., 27.],[28., 29., 30., 31., 32., 33., 34.],[35., 36., 37., 38., 39., 40., 41.],[42., 43., 44., 45., 46., 47., 48.],[49., 50., 51., 52., 53., 54., 55.],[56., 57., 58., 59., 60., 61., 62.],[63., 64., 65., 66., 67., 68., 69.]]]]
+            )
+        y_hat = mnn.Attention.__stack_attention__(attention=x, step_count=1, step_size=2)
+        
+        if torch.equal(y, y_hat): print("\tPassed unit test B for Attention.__shift_x_value__().")
+        else: print("\tFailed unit test B for Attention.__shift_x_value__().")
+
+    @staticmethod
+    def test_stack_attention_C():
+        x = torch.arange(start=0, end=90, step=1).reshape((3,5,6))
+        y = torch.Tensor(
+            [[[[ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0.,  0.,  1.,  2.], [ 0.,  0.,  0.,  6.,  7.,  8.]],
+            [[ 0.,  1.,  2.,  3.,  4.,  5.], [ 6.,  7.,  8.,  9., 10., 11.], [12., 13., 14., 15., 16., 17.], [18., 19., 20., 21., 22., 23.], [24., 25., 26., 27., 28., 29.]]],
+            [[[ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0., 30., 31., 32.], [ 0.,  0.,  0., 36., 37., 38.]], 
+            [[30., 31., 32., 33., 34., 35.], [36., 37., 38., 39., 40., 41.], [42., 43., 44., 45., 46., 47.], [48., 49., 50., 51., 52., 53.], [54., 55., 56., 57., 58., 59.]]],
+            [[[ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0.,  0.,  0.,  0.], [ 0.,  0.,  0., 60., 61., 62.], [ 0.,  0.,  0., 66., 67., 68.]],        [[60., 61., 62., 63., 64., 65.], [66., 67., 68., 69., 70., 71.], [72., 73., 74., 75., 76., 77.], [78., 79., 80., 81., 82., 83.], [84., 85., 86., 87., 88., 89.]]]]
+            )
+        y_hat = mnn.Attention.__stack_attention__(attention=x, step_count=2, step_size=3)
+        
+        if torch.equal(y, y_hat): print("\tPassed unit test C for Attention.__shift_x_value__().")
+        else: print("\tFailed unit test C for Attention.__shift_x_value__().")
+
 if __name__ == "__main__":
     print("\nUnit tests for models.neural_networks.")
 
@@ -158,3 +249,11 @@ if __name__ == "__main__":
     Convolutional.test_A()
     Convolutional.test_B()
     Convolutional.test_C()
+
+    # Attention
+    Attention.test_A()
+    Attention.test_B()
+    Attention.test_C()
+    Attention.test_stack_attention_A()
+    Attention.test_stack_attention_B()
+    Attention.test_stack_attention_C()

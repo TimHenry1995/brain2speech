@@ -6,7 +6,7 @@ from typing import Tuple, Callable, List, Dict
 import sys
 sys.path.append('.')
 from models import utilities
-
+import time
 # Neural Network
 class Fitter():
     """This class defines a fitter for neural networks. 
@@ -121,7 +121,7 @@ class Fitter():
                 
                 train_y_hat = stationary_neural_network(train_x_b)
                 train_loss = loss_function(train_y_hat, train_y_b)
-                
+                time.sleep(0.5)
                 train_loss.backward()
                 train_losses_b += train_loss.item()
                 optimizer.step()

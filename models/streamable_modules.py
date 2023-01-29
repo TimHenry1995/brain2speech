@@ -69,10 +69,12 @@ class Module(ABC):
         Postcondition:
         - Precision of self._parameters (if exists) has the value specified by the static attribute precision."""
 
-        if hasattr(self, "_parameters"):
-            for (name, parameter) in self._parameters.items():
-                if not parameter.dtype == Module.precision:
-                    self._parameters[name] = parameter.to(Module.precision)
+        new_state_dict = self.state_dict()
+        for (name, parameter) in self.state_dict().items():
+            if parameter is None: new_state_dict[name] = None
+            elif not parameter.dtype == Module.precision:
+                new_state_dict[name] = parameter.to(Module.precision)
+        self.load_state_dict(new_state_dict)
 
     def __ensure_data_precision__(x:  Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:
         """Ensures the input has the precision specified by static attribute precision.

@@ -8,9 +8,12 @@ sys.path.append(".")
 from models import streamable_modules as streamable
 from models import stationary_modules as stationary
 from models import module_converter as mc
+from models import utilities as mut
 from plugins import hparams, stft
 import matplotlib.pyplot as plt
 import numpy as np
+import torch.nn.functional as F
+import copy
 
 class NeuralNetwork(torch.nn.Module, ABC):
     """This class provides functionality for neural networks that can be used in streamable and stationary mode."""
@@ -232,8 +235,8 @@ class Recurrent(NeuralNetwork):
         super(Recurrent, self).__init__(is_streamable=is_streamable, name=name)
 
         # 1. Create a dictionary of stationary modules
-        convertible_modules = { 'gru': stationary.GRU(input_size=input_feature_count, hidden_size=output_feature_count, num_layers=1, batch_first=True),
-                                'linear': torch.nn.Linear(output_feature_count, output_feature_count)}
+        convertible_modules = { 'gru': stationary.GRU(input_size=input_feature_count, hidden_size=input_feature_count, num_layers=1, batch_first=True),
+                                'linear': torch.nn.Linear(input_feature_count, output_feature_count)}
         
         # 2. Convert them to streamable modules
         if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
@@ -247,6 +250,197 @@ class Recurrent(NeuralNetwork):
         y_hat = self.gru(x)
         y_hat = self.linear(y_hat)
 
+        # Outputs
+        return y_hat
+
+class Attention(NeuralNetwork):
+    """This class provides an attention module that uses a query (e.g. EEG time course) to select from a value (e.g. speech spectrogram) 
+    using a similarity of intermediate representations for query and a key (e.g. EEG time course). Here, x_key and x_value may relate to one another with
+    a temporal offset. That is, timepoint r in x_key might relate mostly to time point r + delta in x_value. Assuming that delta is not known multiple deltas will be 
+    tried and the network has to choose which one is optimal."""
+
+    def __init__(self, query_feature_count: int, hidden_feature_count: int, x_key: torch.Tensor, x_value: torch.Tensor, labels: List[str], pause_string: str, step_count: int = 1, step_size: int = 1, is_streamable: bool = False, name: str = "Attention") -> object:
+        """Constructor for this class.
+        
+        Inputs:
+        - query_feature_count: The number of features of the query, i.e. the time series for which similiar time frames are searched.
+        - hidden_feature_count: The number of hidden features, i.e. the representation of query and hidden used to estimate their similarity.
+        - x_key: The time course (e.g. EEG) whose similarity with the query time course decides which value vector to choose from x_value. 
+            Shape == [time frame count, channel count].
+        - x_value: The time course (e.g. speech spectrogram) from which value vectors are chosen based on the simlarity of x_query and x_key. Indexing assumed to be in sync with that of x_key.
+            Shape == [time frame count, channel count].
+            The time frame count has to be the same as for x_key but the channel count may be different.
+        - labels: The labels that indicate for each time frame which word was shown on screen.
+        - pause_string: The string used to indicate pauses between words.
+        - step_count : Integer at least 1. The number of shifts between x_key and x_value that should be tried. 
+            For a shift count of 1 each time frame of x_key will directly relate to its corresponing time frame in x_key.
+            For a shift count of 2 there will be an operation where the attention matrix is shifted step_size many units into the future 
+            (along both the query and the value axes). Hence, if time frame s of the query attends time frame r of the value then time frame 
+            r + step_size is assigned from the value to time frame s + step_size of the output. If shift count is set to 3 then 
+            there will be yet another attention operation where the step_size is doubled etc..
+        - step_size: Integer at least 1. The number of steps by which timeframes of the attention matrix are shifted to the future along
+            both the query and the value axes to account for temporal offsets between x_key and x_value. 
+        - is_streamable: Indicates whether this neural network shall be used in streaming mode.
+        - name: The name of the neural network.
+
+        Outputs:
+        - The instance of this class."""
+
+        # Input validity
+        assert type(x_key) == torch.Tensor, f"Expected x_key to have type torch.Tensor, not {type(x_key)}"
+        assert len(x_key.size()) == 2, f"Expected x_key to have shape [time frame count, channel count], received {x_key.size()}"
+        assert type(x_value) == torch.Tensor, f"Expected x_value to have type torch.Tensor, not {type(x_value)}"
+        assert len(x_value.size()) == 2, f"Expected x_value to have shape [time frame count, channel count], received {x_value.size()}"
+        assert type(labels) == type([""]), f'Expected labels to have type {type([""])} but received {type([""])}'
+        assert x_key.size()[0] == x_value.size()[0] and x_value.size()[0] == len(labels), f"Exepected x_key, x_value and labels to have same number of time frame along axis 0, received {x_key.size()}, {x_value.size()}, {len(labels)} respectively."
+        assert step_count >= 1, f"The step_count is expected to be at least 1. Received {step_count}"
+        assert step_size >= 1, f"The step_size is expected to be at least 1. Received {step_size}"
+
+        # Fields
+        self.step_count = step_count
+        self.step_size = step_size
+
+        # Save key and value
+        self.x_key = copy.deepcopy(x_key) 
+        self.x_value = copy.deepcopy(x_value) 
+
+        # Position encode self.x_key 
+        self.x_key = mut.reshape_by_label(x=x_key, labels=labels, pause_string=pause_string) 
+        key_instances_per_batch, key_time_frames_per_instance, key_feature_count = self.x_key.size()
+        P = Attention.__get_position_encoding__(instances_per_batch=key_instances_per_batch, time_frames_per_instance=key_time_frames_per_instance, feature_count=key_feature_count)
+        self.x_key = mut.undo_reshape_by_label(y=self.x_key + P, labels=labels, pause_string=pause_string)
+
+        # Following the super class instructions for initialization
+        # 0. Super
+        super(Attention, self).__init__(is_streamable=is_streamable, name=name)
+
+        # 1. Create a dictionary of stationary modules
+        convertible_modules = { 'query_key_layer': torch.nn.Linear(in_features=query_feature_count, out_features=hidden_feature_count, bias=False),
+                                'shift_layer': torch.nn.Linear(in_features=step_count, out_features=1, bias=False)}
+        
+        # 2. Convert them to streamable modules
+        if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
+        
+        # 3. Save the convertible modules for later computations     
+        self.query_key_layer = convertible_modules['query_key_layer']
+        self.query_key_layer.weight = torch.nn.parameter.Parameter(torch.eye(n=hidden_feature_count, m=query_feature_count))
+        self.shift_layer = convertible_modules['shift_layer']
+        self.shift_layer.weight = torch.nn.parameter.Parameter(torch.ones(size=(1, step_count))/step_count)
+
+    @staticmethod
+    def __stack_attention__(attention: torch.Tensor, step_count: int = 1, step_size: int = 1) -> torch.Tensor:
+        """Shifts the time frames of the attention matrix step_count-1 many times by step_size many time frames into
+        the future along both the query and the value axes. Zero padding is applied to the past time points to ensure the 
+        number of time frames stay constant. The resulting matrices are stacked.
+        
+        Inputs:
+        - attention: The matrix to be shifted. Shape == [instances per batch, time frame count query, time frame count value].
+        - step_count: Integer > 1. The number of shifts to be performed. If set to 1 then just the original x_value will be returned.
+        - step_size: Integer > 1. The number of time frames between two adjacent shifts - 1.
+        
+        Outputs:
+        - attention_stack: The stack of shifted attention matrices. Shape == [instances per batch, step_count, time frame count query, time frame count value]
+        """
+
+        # Shapes
+        instances_per_batch, time_frame_count_query, time_frame_count_value = attention.size()
+
+        # Pad it along both axes
+        k = (step_count - 1)*step_size
+        attention_padded = torch.zeros(size=[instances_per_batch, time_frame_count_query + k, time_frame_count_value + k])
+        attention_padded[:, k:, k:] = attention
+        
+        # Shift and stack
+        xs = [None] * (step_count)
+        for p in range(len(xs)): 
+            a = p*(step_size)
+            b = a + time_frame_count_query
+            c = a + time_frame_count_value
+            xs[p] = attention_padded[:,a:b,a:c].unsqueeze(1)
+        attention_stack = torch.cat(xs, dim=1) # Instance axis
+
+        # Outputs
+        return attention_stack
+
+    @staticmethod
+    def __get_position_encoding__(instances_per_batch: int, time_frames_per_instance: int, feature_count: int, n: int = 10000) -> torch.Tensor:
+        """Generates a position encoding, i.e. a matrix of damped sinusoids that encode time across rows.
+        
+        Inputs:
+        - instances_per_batch: The number of instances that should be in a batch.
+        - time_frames_per_instance: The number of time frames for the output matrix.
+        - feature_count: The number of features along which a time vector shall expand.
+        
+        Outputs:
+        - x: The positional encoding of shape [instances_per_batch, time_frames_per_instance, feature_count]"""
+
+        # Iterate time frames
+        x_value = np.zeros((time_frames_per_instance, feature_count))
+        for k in range(time_frames_per_instance):
+        
+            # Iterate features
+            for i in np.arange(int(feature_count/2)):
+            
+                # Generate damped sinusoids
+                denominator = np.power(n, 2*i/feature_count)
+                x_value[k, 2*i] = np.sin(k/denominator)
+                x_value[k, 2*i+1] = np.cos(k/denominator)
+      
+        # Typing
+        x_value = torch.Tensor(np.array(x_value, dtype=np.float32))
+
+        # Repeat for each instance
+        x_value = x_value.repeat(repeats=(instances_per_batch, 1, 1))
+
+        # Outputs
+        return x_value
+    
+    def forward(self, x: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """
+        Inputs:
+        - x: The query of shape [instances per batch, time frames per query, query feature count].
+            
+        Outputs:
+        - y_hat: The result of querying self.x_value with x_query via an attention matrix obtained from self.x_query and self.x_key. 
+            Shape == [instance count per batch, time frames per query, self.x_value feature count]
+        """
+        # Input validity
+        assert type(x) == torch.Tensor, f"Expected x to have type torch.Tensor, not {type(x)}"
+        assert len(x.size()) == 3 or len(x.size()) == 2, f"Expected x to have shape [instances per batch, time frames per query, query feature count] or [time frames per query, query feature count]], received {x.size()}"
+
+        # Rename input
+        x_query = x
+
+        # Ensure shape
+        if len(x_query.size()) == 2: x_query = x_query.unsqueeze(0) # shape == [instances per batch, time frames per query, query feature count]
+        
+        # Counts
+        query_instances_per_batch, query_time_frames_per_instance, query_feature_count = x_query.size()
+        
+        # Repeat x_key
+        x_key = self.x_key.repeat(repeats=(query_instances_per_batch, 1, 1)) # shape == [instances per batch, time frames per key, key feature count]
+        
+        # Position encoding with same shape as query
+        p_query = Attention.__get_position_encoding__(instances_per_batch=query_instances_per_batch, time_frames_per_instance=query_time_frames_per_instance, feature_count=query_feature_count)
+      
+        # Transform
+        Q = F.relu(self.query_key_layer(x_query + p_query)) # Shape == [instances per batch, time frames per query, self.hidden_node_count]
+        K = F.relu(self.query_key_layer(x_key)) # Shape == [instances per batch, time frames per key, self.hidden_node_count]
+        
+        # Form attention matrix
+        A = Q.matmul(K.permute(0,2,1))
+        A = A / (torch.std(A, dim=-1).unsqueeze(-1)+ 1e-5) # The epsilon avoids division by zero
+        A = F.softmax(A, dim=-1) # Shape == [instances per batch, time frames per query, time frames per key]
+        A = Attention.__stack_attention__(attention=A, step_count=self.step_count, step_size=self.step_size) # Shape == [instances per batch, shift count, time frames per query, time frames per key]
+        
+        # Select from x_value by attention (remember that x_value and x_key have the same time frame count)
+        x_value = self.x_value.unsqueeze(0).unsqueeze(1).repeat(repeats=(query_instances_per_batch, self.step_count, 1, 1)) # Shape == [instances per batch, shift count, time frames per value, value feature count]
+        y_hat = A.matmul(x_value) # Shape == [instances per batch, shift count, time frames per query, value feature count]
+
+        # Collapse along shift axis
+        y_hat = y_hat.permute(dims=(0,2,3,1)) # Now shift axis is last 
+        y_hat = self.shift_layer(y_hat).squeeze() # Shape == [instances per batch, time frames per query, value feature count]
+        
         # Outputs
         return y_hat
 

@@ -130,11 +130,11 @@ if __name__=="__main__":
     # Adapted from https://github.com/neuralinterfacinglab/SingleWordProductionDutch
     root_path = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
     data_path = os.path.join(root_path, 'data', 'eeg_to_spectrogram')
-    result_path = os.path.join(root_path, 'results', 'eeg_to_spectrogram')
-    participant_ids = ['sub-%02d'%i for i in range(1,2)]
+    results_path = os.path.join(root_path, 'results', 'eeg_to_spectrogram')
+    participant_ids = ['sub-%02d'%i for i in range(1,11)]
 
     # Cross validation
-    fold_count = 2
+    fold_count = 5
     kf = KFold(fold_count,shuffle=False)
     
     # VocGan
@@ -171,27 +171,28 @@ if __name__=="__main__":
             # Construct neural networks
             eeg_channel_count = data.shape[1]; mel_channel_count = spectrogram.shape[1]
             step_count = 8; step_size = 8
-            #stationary_neural_network = mnn.MemoryDense(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, step_count=step_count, step_size=step_size, layer_count=1, name="L")
-            #stationary_neural_network = mnn.MemoryDense(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, step_count=step_count, step_size=step_size, layer_count=2, name="D")
-            #stationary_neural_network = mnn.Convolutional(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, name='C')
-            stationary_neural_network = mnn.Recurrent(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, name="R")
-            #stationary_neural_network = nns.AttentionNeuralNetwork(query_feature_count=eeg_channel_count, hidden_feature_count=eeg_channel_count, x_key=train_data[:1024,:], x_value=train_spectrogram[:1024,:], labels=train_labels[:1024], pause_string='', shift_count=shift_count, shift_step_size=shift_step_size)
-       
+            stationary_neural_network = mnn.MemoryDense(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, step_count=step_count, step_size=step_size, layer_count=1, is_streamable=False, name="L")
+            #stationary_neural_network = mnn.MemoryDense(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, step_count=step_count, step_size=step_size, layer_count=2, is_streamable=False, name="D")
+            #stationary_neural_network = mnn.Convolutional(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, is_streamable=False, name='C')
+            #stationary_neural_network = mnn.Recurrent(input_feature_count=eeg_channel_count, output_feature_count=mel_channel_count, is_streamable=False, name="R")
+            #stationary_neural_network = mnn.Attention(query_feature_count=eeg_channel_count, hidden_feature_count=eeg_channel_count, x_key=train_data[:1024,:], x_value=train_spectrogram[:1024,:], labels=train_labels[:1024], pause_string='', step_count=step_count, step_size=step_size, is_streamable=False, name='A')
+            
             # Train
             loss_function = torch.nn.MSELoss()
-            L2_weight = 1e-2
+            L2_weight = 1e-1
             
             optimizer = torch.optim.Adam(stationary_neural_network.parameters(), lr=1e-2, weight_decay=L2_weight)
             fitter = mft.Fitter(is_streamable=False)
             train_data, train_spectrogram = mut.reshape_by_label(x=train_data, labels=train_labels, pause_string='', y=train_spectrogram)
             train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=train_data, y=train_spectrogram, loss_function=loss_function, optimizer=optimizer, epoch_count=50)
-            time.sleep(2) # To prevent CPU from overheating
-            prediction = stationary_neural_network.predict(x=test_data.unsqueeze(0)).squeeze()
-
-            # Plots
+            time.sleep(10) # To prevent CPU from overheating
             model_name = stationary_neural_network.name
-            plot_loss_trajectory(train_losses=train_losses, validation_losses=validation_losses, path=os.path.join(result_path, model_name, participant_id), loss_name=f"mean squared error + {L2_weight}*L2 norm", model_name=model_name,logarithmic=False)
-            plot_x_target_and_output(x=test_data[:1000,:], target=test_spectrogram[:1000,:], output=prediction[:1000,:], labels=test_labels[:1000], pause_string='', path=os.path.join(result_path, model_name, participant_id), model_name=model_name)
+            test_data = mut.reshape_by_label(x=test_data, labels=test_labels, pause_string='')
+            prediction = y=stationary_neural_network.predict(x=test_data)
+            test_data, prediction = mut.undo_reshape_by_label(y=prediction, labels=test_labels, pause_string='', x=test_data)
+            # Plots
+            plot_loss_trajectory(train_losses=train_losses, validation_losses=validation_losses, path=os.path.join(results_path, model_name, participant_id), loss_name=f"mean squared error + {L2_weight}*L2 norm", model_name=model_name,logarithmic=False)
+            plot_x_target_and_output(x=test_data[:1000,:], target=test_spectrogram[:1000,:], output=prediction[:1000,:], labels=test_labels[:1000], pause_string='', path=os.path.join(results_path, model_name, participant_id), model_name=model_name)
 
             #Predict the reconstructed spectrogram for the test data
             rec_spec[test, :] = prediction.detach().numpy()
@@ -206,7 +207,7 @@ if __name__=="__main__":
         # Save quality
         quality_mean = np.mean(rs) # mean over this participant's folds and spectral bins
         quality_std = np.std(rs) # standard deviation
-        qualities_path = os.path.join(result_path, model_name, 'qualities.txt')
+        qualities_path = os.path.join(results_path, model_name, 'qualities.txt')
         new_lines = []
         if os.path.exists(qualities_path):
             with open(qualities_path, 'r') as text_file:
@@ -224,7 +225,7 @@ if __name__=="__main__":
         # Save speed
         speeds = compute_speeds(neural_network=stationary_neural_network, feature_count=eeg_channel_count)
         speeds = [str(speed) for speed in speeds]
-        speeds_path = os.path.join(result_path, model_name, 'speeds.txt')
+        speeds_path = os.path.join(results_path, model_name, 'speeds.txt')
         new_lines = []
         if os.path.exists(speeds_path):
             with open(speeds_path, mode='r') as text_file:
@@ -245,17 +246,17 @@ if __name__=="__main__":
         all_results[p,:,:]=rs
 
         #Save reconstructed spectrogram
-        os.makedirs(os.path.join(result_path), exist_ok=True)
-        np.save(os.path.join(result_path,model_name, f'{participant_id}_predicted_spec.npy'), rec_spec)
+        os.makedirs(os.path.join(results_path), exist_ok=True)
+        np.save(os.path.join(results_path,model_name, f'{participant_id}_predicted_spec.npy'), rec_spec)
         
         #Synthesize waveform from spectrogram using Vocgan
         reconstructedWav, _ = voc_gan.mel_spectrogram_to_waveform(mel_spectrogram=torch.Tensor(rec_spec[:1024,:].T)) # only synthesize the first few secodns to save some time
-        mnn.VocGan.save(waveform= reconstructedWav, file_path=os.path.join(result_path,model_name,f'{participant_id}_predicted.wav'))
+        mnn.VocGan.save(waveform= reconstructedWav, file_path=os.path.join(results_path,model_name,f'{participant_id}_predicted.wav'))
 
         #For comparison synthesize the original spectrogram with Vocgan
         origWav, _ = voc_gan.mel_spectrogram_to_waveform(mel_spectrogram=torch.Tensor(spectrogram[:1024,:].T)) # only synthesize the first few secodns to save some time
-        mnn.VocGan.save(waveform=origWav, file_path=os.path.join(result_path,model_name,f'{participant_id}_orig_synthesized.wav'))
+        mnn.VocGan.save(waveform=origWav, file_path=os.path.join(results_path,model_name,f'{participant_id}_orig_synthesized.wav'))
 
     #Save results in numpy arrays          
-    np.save(os.path.join(result_path,model_name, 'linearResults.npy'),all_results)
+    np.save(os.path.join(results_path,model_name, 'linearResults.npy'),all_results)
     
