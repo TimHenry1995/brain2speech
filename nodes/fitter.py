@@ -73,7 +73,6 @@ class Fitter(Node):
             self.o.data = pd.DataFrame({'train': [0], 'validation': [0]})
             return
             
-
         # Take out x, y, labels
         eeg_slice = torch.Tensor(self.i.data[self.eeg_stream_name].values)
         speech_slice = torch.Tensor(self.i.data[self.speech_stream_name].values)

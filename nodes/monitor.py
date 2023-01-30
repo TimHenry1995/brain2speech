@@ -121,8 +121,8 @@ class Plot(Monitor):
         
         # Set axes limits
         y_lim = [self.y_lower, self.y_upper]
-        if self.y_lower is None: y_lim[0] = 1.2 * np.min(self.__buffer__.values)
-        if self.y_upper is None: y_lim[1] = 1.2 * np.max(self.__buffer__.values)
+        if self.y_lower is None: y_lim[0] = 1.2 * np.min(self.__buffer__.values) - 0.01
+        if self.y_upper is None: y_lim[1] = 1.2 * np.max(self.__buffer__.values) + 0.01
         self.__ax__.set_ylim(bottom=y_lim[0], top=y_lim[1])
         self.__ax__.set_xlim(left=-self.__buffer__.shape[0], right=0)
 

@@ -6,4 +6,4 @@ if __name__ == "__main__":
     mp.freeze_support()
     
     tf.main(app=os.path.join("graphs","main.yaml"), 
-        env_file=os.path.join("environments","no_neural_network.env"))
+        env_file=os.path.join("environments","fitter_predictor.env"))

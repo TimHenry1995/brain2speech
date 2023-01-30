@@ -7,7 +7,7 @@ if __name__ == "__main__":
     root_path = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
     data_path = os.path.join(root_path, 'data', 'eeg_to_spectrogram')
     results_path = os.path.join(root_path, 'results', 'eeg_to_spectrogram')
-    model_names = ["L", "D", "C", "R", "A"]
+    model_names = ["L", "D", "C", "R","A"]
 
     # Font
     plt.rcParams['font.sans-serif'] = "Times New Roman"
@@ -29,13 +29,13 @@ if __name__ == "__main__":
     model_abbreviations = [name.split(" ")[0] for name in model_names]
     plt.bar(x=model_abbreviations, height=correlation_means, yerr=correlation_standard_errors, capsize=7)
     plt.ylabel("Correlation"); plt.xlabel("Model")
-    plt.ylim([0,1])
+    plt.ylim([0.45,0.75])
     plt.tight_layout()
     plt.savefig(os.path.join(results_path, 'Correlations per Model.png'), dpi=600)
     plt.close()
 
     # Plot for one subject part of the original spectrogram, waveform and for each model the reconstruction
-    subject = 'sub-01'
+    subject = 'sub-06'
     spectrograms = [None] * (len(model_names) + 1)
     waveforms = [None] * (len(model_names) + 1)
     labels = np.load(os.path.join(data_path,f'{subject}_procWords.npy'))

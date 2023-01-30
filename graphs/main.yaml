@@ -89,6 +89,8 @@ graphs:
         time_frames_in_buffer: {{MONITOR_TIME_FRAMES_IN_BUFFER}}
         title: "Words"
         y_label: "Word"
+        y_lower: 0
+        y_upper: 1
         height: 2
         is_visible: {{MONITOR_LABEL_VISIBLE}}
 
