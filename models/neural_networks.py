@@ -758,6 +758,10 @@ class VocGan(NeuralNetwork):
         total_seconds = (time_frame_count-1) * VocGan.TIMING_CONVENTIONS["Seconds Per Spectrogram Hop"] + VocGan.TIMING_CONVENTIONS["Seconds Per Spectrogram Window"] 
         
         # Plots
+        # Font
+        plt.rcParams['font.sans-serif'] = "Times New Roman"
+        plt.rcParams['font.family'] = "sans-serif"
+
         # Spectrogram
         plt.figure()
         plt.subplot(plot_count,1,1)
@@ -822,7 +826,7 @@ class VocGan(NeuralNetwork):
         plt.xticks(ticks=tick_locations, labels=tick_labels)
         plt.xlim(0,time_frame_count)
         plt.xlabel("Signal Time (seconds)")
-
+        
         plt.show()
 
     def mel_spectrogram_to_waveform(self, mel_spectrogram: torch.Tensor, is_final_slice: bool = False) -> Tuple[torch.Tensor, float]:

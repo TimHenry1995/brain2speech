@@ -35,7 +35,7 @@ if __name__ == "__main__":
     plt.close()
 
     # Plot for one subject part of the original spectrogram, waveform and for each model the reconstruction
-    subject = 'sub-06'
+    subject = 'sub-09'
     spectrograms = [None] * (len(model_names) + 1)
     waveforms = [None] * (len(model_names) + 1)
     labels = np.load(os.path.join(data_path,f'{subject}_procWords.npy'))

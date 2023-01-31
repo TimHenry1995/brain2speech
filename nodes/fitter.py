@@ -219,7 +219,7 @@ class Fitter(Node):
 
             # Fit
             tick = time.time()
-            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=eeg_reshaped, y=speech_reshaped, loss_function=torch.nn.MSELoss(), optimizer=optimizer, instances_per_batch=(int)(0.66*instance_count), epoch_count=15, validation_proportion=0.33, is_final_slice=False, pad_axis=1)
+            train_losses, validation_losses = fitter.fit(stationary_neural_network=stationary_neural_network, x=eeg_reshaped, y=speech_reshaped, loss_function=torch.nn.MSELoss(), optimizer=optimizer, instances_per_batch=(int)(0.66*instance_count), epoch_count=6, validation_proportion=0.33, is_final_slice=False, pad_axis=1)
             print(f"Fit required {time.time()-tick} seconds.")
             
             # Save the progress

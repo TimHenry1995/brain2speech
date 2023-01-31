@@ -103,7 +103,7 @@ graphs:
         title: "Loss"
         y_label: "Mean Squared Error"
         y_lower: 0
-        height: 2.5
+        height: 3
         is_visible: {{MONITOR_LOSS_VISIBLE}}
 
     - id: waveform_monitor
@@ -116,7 +116,7 @@ graphs:
         y_label: "Amplitude"
         y_lower: -1.25
         y_upper: 1.25
-        height: 2.5
+        height: 3
         is_visible: {{MONITOR_WAVEFORM_VISIBLE}}
 
     edges:
