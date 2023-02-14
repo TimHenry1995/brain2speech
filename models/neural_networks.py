@@ -949,3 +949,138 @@ class VocGan(NeuralNetwork):
         # Save
         wavfile.write(filename=file_path, rate=VocGan.WAVE_SAMPLING_RATE, data=waveform)
     
+class SpeechAutoEncoder(NeuralNetwork):
+    """This neural network can be used to auto encode speech in the form of spectrograms."""
+
+    def __init__(self, input_feature_count: int, x_alphabet: torch.Tensor, is_streamable: bool = False, name: str = "SpeechAutoEncoder") -> object:
+        """Constructor for this class.
+        
+        Inputs:
+        - input_feature_count: number of input features. The number of output features will be the same.
+        - x_alphabet: a matrix that contains alphabet vectors that the network learns to select for its latent representation. Shape == [instance count, feature count]
+        - is_streamable: indicates whether this neural network shall be used in streamable or stationary mode.
+        - name: the name of this neural network
+        """
+    
+        # Following the super class instructions for initialization
+        # 0. Super
+        super(SpeechAutoEncoder, self).__init__(is_streamable=is_streamable, name=name)
+
+        # Constants
+        latent_feature_count = x_alphabet.size()[-1]
+        self.__x_value__ = copy.deepcopy(x_alphabet) # Shape == [time frames of value, features of value]
+        self.__x_key__ = copy.deepcopy(x_alphabet).permute(1,0) # Shape == [features of value, time frames of value]
+
+        # 1. Create a dictionary of stationary modules
+        convertible_modules = {
+            # Encoder
+            'encoder_convolutional_1': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=8, dilation=8),
+            'encoder_convolutional_2': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=4, dilation=4),
+            'encoder_convolutional_3': torch.nn.Conv1d(input_feature_count, latent_feature_count, kernel_size=2, dilation=2),
+            'encoder_convolutional_4': torch.nn.Conv1d(input_feature_count, latent_feature_count, kernel_size=8, dilation=8),
+            'encoder_pad_1': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
+            'encoder_pad_2': torch.nn.ReplicationPad1d(padding=[(4-1)*4,0]),
+            'encoder_pad_3': torch.nn.ReplicationPad1d(padding=[(2-1)*2,0]),
+            'encoder_pad_4': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
+            'encoder_sum': stationary.Sum(),
+            
+            # Style
+            'style_rnn_1': torch.nn.LSTM(latent_feature_count, latent_feature_count, num_layers=1, batch_first=True),
+
+            # Decoder
+            'decoder_convolutional_1': torch.nn.Conv1d(latent_feature_count, input_feature_count, kernel_size=2, dilation=2),
+            'decoder_convolutional_2': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=4, dilation=4),
+            'decoder_convolutional_3': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=8, dilation=8),
+            'decoder_convolutional_4': torch.nn.Conv1d(latent_feature_count, input_feature_count, kernel_size=8, dilation=8),
+            'decoder_pad_1': torch.nn.ReplicationPad1d(padding=[(2-1)*2,0]),
+            'decoder_pad_2': torch.nn.ReplicationPad1d(padding=[(4-1)*4,0]),
+            'decoder_pad_3': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
+            'decoder_pad_4': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
+            'decoder_sum': stationary.Sum(),
+            }
+        
+        # 2. Convert them to streamable modules
+        if is_streamable: convertible_modules = NeuralNetwork.__to_streamable__(modules=convertible_modules)
+        
+        # 3 Save the convertible modules for later computations 
+        # 3.1 Encoder
+        self.encoder_long_path = torch.nn.Sequential(
+            Transpose(),
+            convertible_modules['encoder_pad_1'],
+            convertible_modules['encoder_convolutional_1'], torch.nn.ReLU(),
+            convertible_modules['encoder_pad_2'],
+            convertible_modules['encoder_convolutional_2'], torch.nn.ReLU(),
+            convertible_modules['encoder_pad_3'],
+            convertible_modules['encoder_convolutional_3'],
+            Transpose()
+        )
+
+        self.encoder_short_cut = torch.nn.Sequential(Transpose(), convertible_modules['encoder_pad_4'], convertible_modules['encoder_convolutional_4'], Transpose()) 
+        self.encoder_sum = convertible_modules['encoder_sum']
+
+        # Style
+        self.style = convertible_modules['style_rnn_1']
+
+        # 3.2 Decoder
+        self.decoder_long_path = torch.nn.Sequential(
+            Transpose(),
+            convertible_modules['decoder_pad_1'],
+            convertible_modules['decoder_convolutional_1'], torch.nn.ReLU(),
+            convertible_modules['decoder_pad_2'],
+            convertible_modules['decoder_convolutional_2'], torch.nn.ReLU(),
+            convertible_modules['decoder_pad_3'],
+            convertible_modules['decoder_convolutional_3'],
+            Transpose()
+        )
+
+        self.decoder_short_cut = torch.nn.Sequential(Transpose(), convertible_modules['decoder_pad_4'], convertible_modules['decoder_convolutional_4'],Transpose()) 
+        self.decoder_sum = convertible_modules['decoder_sum']
+
+
+    def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """Executes forward calculation for this neural network. It uses two inputs, a content and a style input.
+        These are both speech spectrograms of the same voice yet with different words being spoken.
+        The network has a content path that goes via a convolutional encoder to an attention module that selects 
+        vectors from x_alphabet provided by the constructor. It also has a style path that goes via the same convolutional encoder to a recurrent module.
+        The recurrent module accumulated the style informtion. Its final output vector is multiplied elementwise with each phoneme vector 
+        seleced by the attention module of the content path. These latent vectors are then passed through a convolutional decoder.
+        The number of time frames is equal for input, latent and output.
+        
+        Inputs:
+        - x: List of two tensors [x_content, x_style]. Each of shape [instances per batch, time frames per instance, input feature count].
+        
+        Outputs:
+        - y_hat: tensor of shape [instances per batch, time frames per content instance, input_feature_count]."""
+        
+        # Input validity
+        assert type(x) == type([]), f"Expected input x to be of type list, received {type(x)}."
+        assert len(x) == 2, f"Expected input x to be a list with two elements, i.e. x_content and x_style. Received list of length {len(x)}."
+        assert x[0].size()[0] == x[1].size()[0], f"Expected x_content and x_style to have the same number of instances per batch. Received {x[0].shape()[0]} for x_content and {x[1].size()[0]} for x_style."
+        assert len(x[0].size()) == 3 and len(x[1].size()) == 3, f"Expected x_content and x_style to have three dimensions. Received shape {x[0].size()} for x_content and {x[1].size()} for x_style."
+        assert x[0].size()[-1] == x[1].size()[-1], f"Expected x_content and x_style to have the same number of features. Received {x[0].size()[-1]} for x_content and {x[1].size()[-1]} for x_style."
+        
+        # Unpack inputs
+        x_content, x_style = x[0], x[1]
+
+        # Enocde
+        x_query = self.encoder_sum([self.encoder_long_path(x_content), self.encoder_short_cut(x_content)]) # Shape == [instances per batch, time frames per instance, latent feature count]
+        x_style = self.encoder_sum([self.encoder_long_path(x_style), self.encoder_short_cut(x_style)]) # Shape == [instances per batch, time frames per instance, latent feature count]
+        x_style, _ = self.style(x_style) 
+        x_style = x_style[:,-1,:].unsqueeze(1) # Final output of rnn. Shape == [instances per batch, 1 time frame, latent feature count]
+
+        # Form attention matrix
+        A = x_query.matmul(self.__x_key__) # Shape == [instances per batch, time frames per query, time frames of x_key]
+        A = A / (torch.std(A, dim=-1).unsqueeze(-1)+ 1e-5) # Scale for stability. The epsilon avoids division by zero
+        A = F.softmax(A, dim=-1) # Shape == [instances per batch, time frames per query, time frames of key]
+        
+        # Select from x_value by attention (remember that x_value and x_key have the same time frame count)
+        x_latent = A.matmul(self.__x_value__) # Shape == [instances per batch, time frames per query, latent feature count]
+        
+        # Combine style and content
+        x_latent = x_latent * x_style
+
+        # Decode
+        y_hat = self.decoder_sum([self.decoder_long_path(x_latent), self.decoder_short_cut(x_latent)])
+
+        # Outputs
+        return y_hat

@@ -211,7 +211,7 @@ class Fitter(Node):
                     stationary_neural_network.load_state_dict(torch.load(parameters_path))
 
                 # Construct optimizer
-                optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.01)
+                optimizer = torch.optim.Adam(params=stationary_neural_network.parameters(), lr=0.001)
 
             # Reshape
             eeg_reshaped, speech_reshaped = utilities.reshape_by_label(x=eeg, labels=labels, pause_string='', y=speech) # Shape == [instance count, time frame count, channel count] where each instance is one label
