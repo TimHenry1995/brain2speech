@@ -216,7 +216,7 @@ def make_speaker_to_file_names(data_path: str)->None:
 
 if __name__ == "__main__":
     # Constants
-    data_path = "/Users/timdick/Documents/Speech Data/cv-corpus-12.0-delta-2022-12-07/nl"
+    data_path = "data/speech_to_speech"
     
     # Convert mp3 to spectrograms (only done once for the entire dataset if you want to preprocess them beforehand (takes a lot of storage)
     #mp3_to_spec_files(input_folder=os.path.join(data_path,"clips"), output_folder=os.path.join(data_path, "clips_spec"))
