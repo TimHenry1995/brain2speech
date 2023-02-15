@@ -133,8 +133,8 @@ def sample_instance_from_spec_file(speaker_to_spectrogram_paths: Dict[str, List[
     spectrogram_paths = random.sample(speaker_to_spectrogram_paths[speaker], k=2) # These are unique samples
 
     # Load the spectrogram
-    x_content = torch.Tensor(np.loadtxt(fname=os.path.join(spectrogram_folder_path, spectrogram_paths[0] + ".npy")))
-    x_style = torch.Tensor(np.loadtxt(fname=os.path.join(spectrogram_folder_path, spectrogram_paths[1] + ".npy")))
+    x_content = torch.Tensor(pd.read_csv(os.path.join(spectrogram_folder_path, spectrogram_paths[0] + ".csv")).values)
+    x_style = torch.Tensor(pd.read_csv(os.path.join(spectrogram_folder_path, spectrogram_paths[1] + ".csv")).values)
 
     # Outputs
     return x_content, x_style
@@ -181,12 +181,12 @@ def mp3_to_spec_files(input_folder:str, output_folder:str)-> None:
 
     # Create output folder
     if not os.path.exists(output_folder): os.mkdir(output_folder)
-    t = 3
+    t = 1
     # Convert
     for path in paths:
         recording = AudioSegment.from_mp3(os.path.join(input_folder, path))
         x = mnn.VocGan.waveform_to_mel_spectrogram(waveform=recording.get_array_of_samples(), original_sampling_rate=recording.frame_rate).T
-        pd.DataFrame(x.to(torch.float16).detach().numpy()).to_csv(os.path.join(output_folder, path.replace(".mp3", ".csv")))
+        pd.DataFrame(x.to(torch.float16).detach().numpy()).to_csv(os.path.join(output_folder, path.replace(".mp3", ".csv")), index=False)
         time.sleep(t)
 
 def make_speaker_to_file_names(data_path: str)->None:
@@ -219,13 +219,13 @@ if __name__ == "__main__":
     data_path = "/Users/timdick/Documents/Speech Data/cv-corpus-12.0-delta-2022-12-07/nl"
     
     # Convert mp3 to spectrograms (only done once for the entire dataset if you want to preprocess them beforehand (takes a lot of storage)
-    mp3_to_spec_files(input_folder=os.path.join(data_path,"clips"), output_folder=os.path.join(data_path, "clips_spec"))
+    #mp3_to_spec_files(input_folder=os.path.join(data_path,"clips"), output_folder=os.path.join(data_path, "clips_spec"))
 
     # Get the spectrogram names for each speaker
     speaker_to_file_names = make_speaker_to_file_names(data_path=data_path)
     
     # Sample a batch from the data
-    x_content, x_style = sample_batch(speaker_to_file_names=speaker_to_file_names, spec_folder=os.path.join(data_path,"clips"), instances_per_batch=4)
+    x_content, x_style = sample_batch(speaker_to_file_names=speaker_to_file_names, spec_folder=os.path.join(data_path,"clips_spec"), instances_per_batch=4, from_mp3=False)
     
     # Plot the first entry of the batch
     plt.figure(); plt.suptitle("Example instance")
@@ -233,7 +233,7 @@ if __name__ == "__main__":
     plt.subplot(2,1,2); plt.imshow(x_style[0].to(torch.float32).T); plt.title("Style Spectrogram"); plt.show()
 
     # Create an alphabet of phoneme vectors
-    x_alphabet, phonemes = make_phoneme_vectors(data_path=data_path, language_label='nld-Latn', max_vector_count=10)
+    x_alphabet, phonemes = make_phoneme_vectors(data_path=data_path, language_label='nld-Latn', max_vector_count=40)
     
     # Stretch it along the channel axis
     phoneme_vector_count = x_alphabet.size()[0]
@@ -249,15 +249,29 @@ if __name__ == "__main__":
     plt.xticks(list(range(phoneme_vector_count)), phonemes); plt.show()
 
     # Create neural network
-    network = mnn.SpeechAutoEncoder(input_feature_count=x_content.shape[-1], x_alphabet=x_alphabet)
+    model = mnn.SpeechAutoEncoder(input_feature_count=x_content.shape[-1], x_alphabet=x_alphabet)
 
     # Fit
-    optimizer = torch.optim.Adam(params=network.parameters(), lr=0.001, weight_decay=0.001)
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=0.001, weight_decay=0.001)
     criterion = torch.nn.MSELoss()
-    for epoch in range(2):  # loop over the dataset multiple times
+    epoch_count = 2
+    instances_per_batch = 16
+    losses = [0.0] * epoch_count
+    batch_count = len(os.listdir(os.path.join(data_path, "clips"))) // instances_per_batch
+    model_progress_path = "parameters/voice_auto_encoder"
+    e = 0
 
-        running_loss = 0.0
-        for i in range(10):
+    # Set true if continuing training session, false if starting from scratch
+    if True:
+        checkpoint = torch.load(model_progress_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        e = checkpoint['epoch']
+        losses = checkpoint['losses']
+    
+    for e in range(e, epoch_count):  # loop over the dataset multiple times
+
+        for b in range(batch_count):
             # get the inputs
             x_content, x_style = sample_batch(speaker_to_file_names=speaker_to_file_names, spec_folder=os.path.join(data_path,"clips_spec"), instances_per_batch=16)
     
@@ -265,21 +279,23 @@ if __name__ == "__main__":
             optimizer.zero_grad()
 
             # forward + backward + optimize
-            y_hat = network([x_content, x_style])
+            y_hat = model([x_content, x_style])
             loss = criterion(y_hat, x_content)
             loss.backward()
             optimizer.step()
-
+            losses[e] += loss.item() / batch_count
+            
             # print statistics
-            running_loss += loss.item()
-            if i % 10 == 9:    # print every 2000 mini-batches
-                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
-                running_loss = 0.0
+            if b % 10 == 9: print(f'epoch {e + 1}, batch {b + 1}, loss {loss.item()}')
+
+        # Save progress
+        torch.save({'epoch': e, 'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(), 'losses': losses,}, model_progress_path + f"_epoch_{e}.torch")
 
     print('Finished Training')
 
     # Predict
-    y_hat = network([x_content, x_style]).detach().numpy()
+    y_hat = model([x_content, x_style]).detach().numpy()
 
     # Plot example prediction
     plt.figure(); plt.suptitle("Example Prediction")
