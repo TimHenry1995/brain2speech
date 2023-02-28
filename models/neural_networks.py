@@ -1055,7 +1055,7 @@ class SpeechAutoEncoder(NeuralNetwork):
         # Input validity
         assert type(x) == type([]), f"Expected input x to be of type list, received {type(x)}."
         assert len(x) == 2, f"Expected input x to be a list with two elements, i.e. x_content and x_style. Received list of length {len(x)}."
-        assert x[0].size()[0] == x[1].size()[0], f"Expected x_content and x_style to have the same number of instances per batch. Received {x[0].shape()[0]} for x_content and {x[1].size()[0]} for x_style."
+        assert x[0].size()[0] == x[1].size()[0], f"Expected x_content and x_style to have the same number of instances per batch. Received {x[0].size()[0]} for x_content and {x[1].size()[0]} for x_style."
         assert len(x[0].size()) == 3 and len(x[1].size()) == 3, f"Expected x_content and x_style to have three dimensions. Received shape {x[0].size()} for x_content and {x[1].size()} for x_style."
         assert x[0].size()[-1] == x[1].size()[-1], f"Expected x_content and x_style to have the same number of features. Received {x[0].size()[-1]} for x_content and {x[1].size()[-1]} for x_style."
         
@@ -1083,4 +1083,4 @@ class SpeechAutoEncoder(NeuralNetwork):
         y_hat = self.decoder_sum([self.decoder_long_path(x_latent), self.decoder_short_cut(x_latent)])
 
         # Outputs
-        return y_hat
+        return y_hat, A
