@@ -974,29 +974,41 @@ class SpeechAutoEncoder(NeuralNetwork):
         # 1. Create a dictionary of stationary modules
         convertible_modules = {
             # Encoder
-            'encoder_convolutional_1': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=8, dilation=8),
-            'encoder_convolutional_2': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=4, dilation=4),
-            'encoder_convolutional_3': torch.nn.Conv1d(input_feature_count, latent_feature_count, kernel_size=2, dilation=2),
-            'encoder_convolutional_4': torch.nn.Conv1d(input_feature_count, latent_feature_count, kernel_size=8, dilation=8),
-            'encoder_pad_1': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
-            'encoder_pad_2': torch.nn.ReplicationPad1d(padding=[(4-1)*4,0]),
-            'encoder_pad_3': torch.nn.ReplicationPad1d(padding=[(2-1)*2,0]),
-            'encoder_pad_4': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
-            'encoder_sum': stationary.Sum(),
+            'content_encoder_linear': torch.nn.Linear(in_features=input_feature_count, out_features=latent_feature_count),
+            'content_encoder_convolutional_1': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=8, dilation=8),
+            'content_encoder_convolutional_2': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=4, dilation=4),
+            'content_encoder_convolutional_3': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=2, dilation=2),
+            'content_encoder_convolutional_4': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=8, dilation=8),
+            'content_encoder_pad_1': torch.nn.ReplicationPad1d(padding=[(8-1)*8//2,(8-1)*8//2]),
+            'content_encoder_pad_2': torch.nn.ReplicationPad1d(padding=[(4-1)*4//2,(4-1)*4//2]),
+            'content_encoder_pad_3': torch.nn.ReplicationPad1d(padding=[(2-1)*2//2,(2-1)*2//2]),
+            'content_encoder_pad_4': torch.nn.ReplicationPad1d(padding=[(8-1)*8//2,(8-1)*8//2]),
+            'content_encoder_sum': stationary.Sum(),
             
             # Style
+            'style_encoder_linear': torch.nn.Linear(in_features=input_feature_count, out_features=latent_feature_count),
+            'style_encoder_convolutional_1': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=8, dilation=8),
+            'style_encoder_convolutional_2': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=4, dilation=4),
+            'style_encoder_convolutional_3': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=2, dilation=2),
+            'style_encoder_convolutional_4': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=8, dilation=8),
+            'style_encoder_pad_1': torch.nn.ReplicationPad1d(padding=[(8-1)*8//2,(8-1)*8//2]),
+            'style_encoder_pad_2': torch.nn.ReplicationPad1d(padding=[(4-1)*4//2,(4-1)*4//2]),
+            'style_encoder_pad_3': torch.nn.ReplicationPad1d(padding=[(2-1)*2//2,(2-1)*2//2]),
+            'style_encoder_pad_4': torch.nn.ReplicationPad1d(padding=[(8-1)*8//2,(8-1)*8//2]),
+            'style_encoder_sum': stationary.Sum(),
             'style_rnn_1': torch.nn.LSTM(latent_feature_count, latent_feature_count, num_layers=1, batch_first=True),
 
             # Decoder
-            'decoder_convolutional_1': torch.nn.Conv1d(latent_feature_count, input_feature_count, kernel_size=2, dilation=2),
-            'decoder_convolutional_2': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=4, dilation=4),
-            'decoder_convolutional_3': torch.nn.Conv1d(input_feature_count, input_feature_count, kernel_size=8, dilation=8),
-            'decoder_convolutional_4': torch.nn.Conv1d(latent_feature_count, input_feature_count, kernel_size=8, dilation=8),
+            'decoder_convolutional_1': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=2, dilation=2),
+            'decoder_convolutional_2': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=4, dilation=4),
+            'decoder_convolutional_3': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=8, dilation=8),
+            'decoder_convolutional_4': torch.nn.Conv1d(latent_feature_count, latent_feature_count, kernel_size=8, dilation=8),
             'decoder_pad_1': torch.nn.ReplicationPad1d(padding=[(2-1)*2,0]),
             'decoder_pad_2': torch.nn.ReplicationPad1d(padding=[(4-1)*4,0]),
             'decoder_pad_3': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
             'decoder_pad_4': torch.nn.ReplicationPad1d(padding=[(8-1)*8,0]),
             'decoder_sum': stationary.Sum(),
+            'decoder_linear': torch.nn.Linear(in_features=latent_feature_count, out_features=input_feature_count)
             }
         
         # 2. Convert them to streamable modules
@@ -1004,22 +1016,38 @@ class SpeechAutoEncoder(NeuralNetwork):
         
         # 3 Save the convertible modules for later computations 
         # 3.1 Encoder
-        self.encoder_long_path = torch.nn.Sequential(
+        self.content_encoder_long_path = torch.nn.Sequential(
             Transpose(),
-            convertible_modules['encoder_pad_1'],
-            convertible_modules['encoder_convolutional_1'], torch.nn.ReLU(),
-            convertible_modules['encoder_pad_2'],
-            convertible_modules['encoder_convolutional_2'], torch.nn.ReLU(),
-            convertible_modules['encoder_pad_3'],
-            convertible_modules['encoder_convolutional_3'],
+            convertible_modules['content_encoder_pad_1'],
+            convertible_modules['content_encoder_convolutional_1'], torch.nn.ReLU(),
+            convertible_modules['content_encoder_pad_2'],
+            convertible_modules['content_encoder_convolutional_2'], torch.nn.ReLU(),
+            convertible_modules['content_encoder_pad_3'],
+            convertible_modules['content_encoder_convolutional_3'],
             Transpose()
         )
 
-        self.encoder_short_cut = torch.nn.Sequential(Transpose(), convertible_modules['encoder_pad_4'], convertible_modules['encoder_convolutional_4'], Transpose()) 
-        self.encoder_sum = convertible_modules['encoder_sum']
+        self.content_encoder_linear = convertible_modules['content_encoder_linear']
+        self.content_encoder_short_cut = torch.nn.Sequential(Transpose(), convertible_modules['content_encoder_pad_4'], convertible_modules['content_encoder_convolutional_4'], Transpose()) 
+        self.content_encoder_sum = convertible_modules['content_encoder_sum']
 
         # Style
-        self.style = convertible_modules['style_rnn_1']
+        self.style_encoder_long_path = torch.nn.Sequential(
+            Transpose(),
+            convertible_modules['style_encoder_pad_1'],
+            convertible_modules['style_encoder_convolutional_1'], torch.nn.ReLU(),
+            convertible_modules['style_encoder_pad_2'],
+            convertible_modules['style_encoder_convolutional_2'], torch.nn.ReLU(),
+            convertible_modules['style_encoder_pad_3'],
+            convertible_modules['style_encoder_convolutional_3'],
+            Transpose()
+        )
+
+        self.style_encoder_linear = convertible_modules['style_encoder_linear']
+        self.style_encoder_short_cut = torch.nn.Sequential(Transpose(), convertible_modules['style_encoder_pad_4'], convertible_modules['style_encoder_convolutional_4'], Transpose()) 
+        self.style_encoder_sum = convertible_modules['style_encoder_sum']
+
+        self.style_rnn = convertible_modules['style_rnn_1']
 
         # 3.2 Decoder
         self.decoder_long_path = torch.nn.Sequential(
@@ -1035,6 +1063,7 @@ class SpeechAutoEncoder(NeuralNetwork):
 
         self.decoder_short_cut = torch.nn.Sequential(Transpose(), convertible_modules['decoder_pad_4'], convertible_modules['decoder_convolutional_4'],Transpose()) 
         self.decoder_sum = convertible_modules['decoder_sum']
+        self.decoder_linear = convertible_modules['decoder_linear']
 
 
     def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> Union[torch.Tensor, List[torch.Tensor]]:
@@ -1062,10 +1091,11 @@ class SpeechAutoEncoder(NeuralNetwork):
         # Unpack inputs
         x_content, x_style = x[0], x[1]
 
-        # Enocde
-        x_query = self.encoder_sum([self.encoder_long_path(x_content), self.encoder_short_cut(x_content)]) # Shape == [instances per batch, time frames per instance, latent feature count]
-        x_style = self.encoder_sum([self.encoder_long_path(x_style), self.encoder_short_cut(x_style)]) # Shape == [instances per batch, time frames per instance, latent feature count]
-        x_style, _ = self.style(x_style) 
+        # Encode
+        x_content = self.content_encoder_linear(x_content); x_style = self.style_encoder_linear(x_style)
+        x_query = self.content_encoder_sum([self.content_encoder_long_path(x_content), self.content_encoder_short_cut(x_content)]) # Shape == [instances per batch, time frames per instance, latent feature count]
+        x_style = self.style_encoder_sum(  [self.style_encoder_long_path(x_style),     self.style_encoder_short_cut(x_style)]) # Shape == [instances per batch, time frames per instance, latent feature count]
+        x_style, _ = self.style_rnn(x_style) 
         x_style = x_style[:,-1,:].unsqueeze(1) # Final output of rnn. Shape == [instances per batch, 1 time frame, latent feature count]
 
         # Form attention matrix
@@ -1081,6 +1111,7 @@ class SpeechAutoEncoder(NeuralNetwork):
 
         # Decode
         y_hat = self.decoder_sum([self.decoder_long_path(x_latent), self.decoder_short_cut(x_latent)])
+        y_hat = self.decoder_linear(y_hat)
 
         # Outputs
         return y_hat, A

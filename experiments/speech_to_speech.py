@@ -309,10 +309,10 @@ def plot_prediction(model: torch.nn.Module, speakers: List[str], data_path: str)
 
     # Plot example prediction
     plt.figure(); plt.suptitle("Example Prediction")
-    plt.subplot(4,1,1); plt.title('Content Input'); plt.imshow(x_content.T, aspect='auto'); plt.ylabel('Mel Channels')
-    plt.subplot(4,1,2); plt.title('Content Output'); plt.imshow(y_hat.T, aspect='auto'); plt.ylabel('Mel Channels')
+    plt.subplot(4,1,1); plt.title('Content Input'); plt.imshow(np.flipud(x_content.T), aspect='auto'); plt.ylabel('Mel Channels')
+    plt.subplot(4,1,2); plt.title('Content Output'); plt.imshow(np.flipud(y_hat.T), aspect='auto'); plt.ylabel('Mel Channels')
     plt.subplot(4,1,3); plt.title('Attention matrix') 
-    plt.imshow(A.detach().numpy()[0].T, aspect='auto')
+    plt.imshow(np.flipud(A.detach().numpy()[0].T), aspect='auto')
     plt.ylabel('Phonemes'); plt.xlabel("Time Frames")
     plt.subplot(4,1,4)
     plt.yticks([]); plt.xticks([])
@@ -334,6 +334,7 @@ if __name__ == "__main__":
     # Separate into train and validation portion
     train_speaker_to_file_names = {}
     validation_speaker_to_file_names = {}
+    random.seed(42)
     for key, value in speaker_to_file_names.items():
         if random.random() < 0.8: train_speaker_to_file_names[key] = value
         else: validation_speaker_to_file_names[key] = value
@@ -344,8 +345,8 @@ if __name__ == "__main__":
     
     # Plot the first entry of the batch
     plt.figure(); plt.suptitle("Example instance")
-    plt.subplot(2,1,1); plt.imshow(x_content_train[0].to(torch.float32).T); plt.title("Content Spectrogram")
-    plt.subplot(2,1,2); plt.imshow(x_style_train[0].to(torch.float32).T); plt.title("Style Spectrogram"); plt.show()
+    plt.subplot(2,1,1); plt.imshow(np.flipud(x_content_train[0].to(torch.float32).T)); plt.title("Content Spectrogram"); plt.ylabel('Mel Bin')
+    plt.subplot(2,1,2); plt.imshow(np.flipud(x_style_train[0].to(torch.float32).T)); plt.title("Style Spectrogram"); plt.ylabel('Mel Bin'); plt.xlabel('Time Frame'); plt.show()
 
     # Create an alphabet of phoneme vectors
     x_alphabet, phonemes = make_phoneme_vectors(data_path=data_path, language_label='nld-Latn', max_vector_count=40)
@@ -367,15 +368,15 @@ if __name__ == "__main__":
     model = mnn.SpeechAutoEncoder(input_feature_count=x_content_train.shape[-1], x_alphabet=x_alphabet)
 
     # Fit
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=0.001, weight_decay=0.001)
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=0.00001, weight_decay=0.001)
     criterion = torch.nn.MSELoss()
-    epoch_count = 3
-    instances_per_batch = 16
+    epoch_count = 30
+    instances_per_batch = 32
     train_losses = [0.0] * epoch_count
     validation_losses = [0.0] * epoch_count
     batch_count = (int)(0.8 * len(os.listdir(os.path.join(data_path, "clips")))) // instances_per_batch
     model_progress_path = "parameters/voice_auto_encoder"
-    e = 2 # Epoch at which we cant to continue the training. 0 if train from scratch
+    e = 25 # Epoch at which we cant to continue the training. 0 if train from scratch
 
     # Set true if continuing training session, false if starting from scratch
     if 0 < e:
